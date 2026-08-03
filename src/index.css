@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-base text-white antialiased;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Hiragino Kaku Gothic ProN',
+    'Noto Sans JP',
+    sans-serif;
+  overscroll-behavior-y: none;
+}
