@@ -71,10 +71,12 @@ UI 上で「合計最小 / 最長最小」を切り替えられます。同点�
 1. メモリキャッシュ（10分）
 2. **Text Search**（実在の場所を返すので駅を取りこぼさない。緯度経度も返るため
    選択時の Place Details が不要）
-3. 件数が足りず完全一致も無ければ Autocomplete で補う
+3. 5件に満たなければ Autocomplete で補う（Text Search の約1/10の単価）
 4. それでも0件ならタイプ指定なしの Autocomplete
 
-完全一致が取れたら打ち切るため、通常のコールは1入力あたり1回です。
+Text Search に「渋谷 駅」と投げると Google が絞り込みすぎて渋谷駅そのものしか返らないため、
+近隣の駅を Autocomplete で足しています。それでも5件に届かないことはありますが、
+無関係な駅を出すよりは少ない方がよいという判断です。
 
 Places Autocomplete は住所も部分一致の対象にするため、
 「渋谷」で代官山駅・代々木公園駅（どちらも渋谷区）が返ります。
@@ -92,6 +94,7 @@ Places Autocomplete は住所も部分一致の対象にするため、
 ### 事前準備
 
 1. Firebase プロジェクトを作成し、**Blaze プラン**に変更（外部API呼び出しに必要）
+   - Functions のランタイムは **Node.js 22**（`firebase.json` の `runtime`）
 2. Google Maps Platform で APIキーを発行し、**Places API (New)** を有効化
    （Routes API は使用しません）
 3. APIキーには HTTP リファラ制限ではなく **API 制限**（Places API (New) のみ）を設定してください。
@@ -200,7 +203,7 @@ curl 'https://<your-app>.web.app/api/stations/autocomplete?q=渋谷&debug=1'
 
 ```json
 {
-  "apiVersion": "2026-08-04-stations-v3",
+  "apiVersion": "2026-08-04-stations-v4",
   "receivedQuery": "渋谷",
   "suggestions": [...],
   "trace": {

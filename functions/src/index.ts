@@ -56,7 +56,7 @@ const AUTOCOMPLETE_LIMIT = 5;
  * デプロイされているビルドの識別子。
  * 「直したはずなのに直っていない」ときに、実際に動いている版を確認するために返す。
  */
-const API_VERSION = '2026-08-04-stations-v3';
+const API_VERSION = '2026-08-04-stations-v4';
 
 router.get(
   '/stations/autocomplete',
