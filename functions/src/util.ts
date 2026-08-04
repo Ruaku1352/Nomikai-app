@@ -15,6 +15,97 @@ export function haversineMeters(a: LatLng, b: LatLng): number {
   return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+/* ------------------------------------------------- 駅名のマッチング */
+
+/**
+ * 比較用の正規化。
+ * 全角/半角・大文字小文字・空白・中黒を吸収し、カタカナはひらがなに寄せる。
+ */
+export function normalizeForMatch(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\s\u3000・･,、.。]/g, '')
+    .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+}
+
+/** 末尾の「駅」「停留場」などを落とす（「渋谷」と「渋谷駅」を同一視するため） */
+export function stripStationSuffix(value: string): string {
+  return value.replace(/(駅前|駅|えき|停留場|停留所|のりば|station)$/i, '');
+}
+
+/**
+ * 入力に対する「駅名」の一致度。住所は見ない。
+ *
+ * Places Autocomplete は住所も含めて部分一致するため、「渋谷」で
+ * 代官山駅・代々木公園駅（いずれも渋谷区）が返ってくる。
+ * 駅名側の一致を優先するために使う。
+ *
+ *   3 = 完全一致（渋谷 / 渋谷駅）
+ *   2 = 前方一致（渋谷ヒカリエ…）
+ *   1 = 部分一致（新渋谷…）
+ *   0 = 駅名に含まれない（＝住所だけが一致している）
+ */
+export function scoreStationNameMatch(name: string, query: string): number {
+  const n = stripStationSuffix(normalizeForMatch(name));
+  const q = stripStationSuffix(normalizeForMatch(query));
+  if (!q || !n) return 0;
+  if (n === q) return 3;
+  if (n.startsWith(q)) return 2;
+  if (n.includes(q)) return 1;
+  return 0;
+}
+
+/** 漢字を含む入力か（かな・ローマ字入力と区別する） */
+export function containsKanji(value: string): boolean {
+  return /[\u3005\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/.test(value);
+}
+
+/**
+ * 駅名の一致度で並べ替える。
+ *
+ * 1件でも駅名が一致していれば、住所だけ一致した候補は捨てる。
+ *
+ * 1件も一致しなかった場合の扱いは入力の種類で変える。
+ * - **漢字を含む入力**（渋谷 / 渋谷駅）: 駅名と直接照合できるはずなので、
+ *   一致が無い＝無関係な候補しか無いということ。**空を返す。**
+ *   以前はGoogleの順序をそのまま返していたため、「渋谷駅」の候補に
+ *   代官山駅・代々木公園駅・雨晴駅（富山県）のような無関係な駅が出ていた。
+ * - **かな・ローマ字入力**（しぶや / shibuya）: 漢字の駅名とは文字列照合できず、
+ *   Googleが読みで拾ってくれている。ここで捨てると候補が全滅するのでGoogleの順序を使う。
+ *
+ * 同名の駅（JRと地下鉄で別placeId）は1つにまとめる。
+ */
+export function rankByNameMatch<T extends { placeId: string; name: string }>(
+  suggestions: T[],
+  query: string,
+  limit: number,
+): T[] {
+  const scored = suggestions.map((s, index) => ({
+    item: s,
+    score: scoreStationNameMatch(s.name, query),
+    index,
+  }));
+
+  const matched = scored.filter((x) => x.score > 0);
+  const pool =
+    matched.length > 0 ? matched : containsKanji(query) ? [] : scored;
+
+  // スコア降順、同スコアならGoogleが返した順（＝関連度順）を保つ
+  pool.sort((a, b) => b.score - a.score || a.index - b.index);
+
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const { item } of pool) {
+    const key = normalizeForMatch(item.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
 /**
  * 候補駅1件分のコスト集計。
  *

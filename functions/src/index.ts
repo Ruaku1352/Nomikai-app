@@ -9,6 +9,7 @@ import {
   photoUri,
   placeDetails,
   searchVenues,
+  type AutocompleteTrace,
   type LatLng,
 } from './google';
 import {
@@ -51,6 +52,12 @@ const wrap =
 /** オートコンプリートで返す候補の件数 */
 const AUTOCOMPLETE_LIMIT = 5;
 
+/**
+ * デプロイされているビルドの識別子。
+ * 「直したはずなのに直っていない」ときに、実際に動いている版を確認するために返す。
+ */
+const API_VERSION = '2026-08-04-stations-v3';
+
 router.get(
   '/stations/autocomplete',
   wrap(async (req, res) => {
@@ -64,6 +71,15 @@ router.get(
       10,
       Math.max(1, Number(req.query.limit ?? AUTOCOMPLETE_LIMIT) || AUTOCOMPLETE_LIMIT),
     );
+
+    // ?debug=1 でどの段階が何件返したかを一緒に返す（切り分け用。キーは含まない）
+    if (req.query.debug) {
+      const trace: AutocompleteTrace = { stages: [], source: 'none' };
+      const suggestions = await autocompleteStations(q, limit, trace);
+      res.json({ apiVersion: API_VERSION, receivedQuery: q, suggestions, trace });
+      return;
+    }
+
     res.json({ suggestions: await autocompleteStations(q, limit) });
   }),
 );
@@ -78,6 +94,7 @@ router.get(
     const keyConfigured = Boolean(process.env.GOOGLE_MAPS_API_KEY);
     if (!keyConfigured) {
       res.json({
+        apiVersion: API_VERSION,
         keyConfigured: false,
         ok: false,
         hint: 'functions/.env に GOOGLE_MAPS_API_KEY を設定するか、Secret Manager に登録してください。',
@@ -85,17 +102,21 @@ router.get(
       return;
     }
     try {
-      const suggestions = await autocompleteStations('新宿', 3);
+      const trace: AutocompleteTrace = { stages: [], source: 'none' };
+      const suggestions = await autocompleteStations('渋谷', 5, trace);
       res.json({
+        apiVersion: API_VERSION,
         keyConfigured: true,
-        ok: true,
-        sampleQuery: '新宿',
+        ok: suggestions.length > 0,
+        sampleQuery: '渋谷',
         resultCount: suggestions.length,
         samples: suggestions.map((s) => s.name),
+        trace,
       });
     } catch (e) {
       const err = e as HttpError;
       res.json({
+        apiVersion: API_VERSION,
         keyConfigured: true,
         ok: false,
         error: err.message,

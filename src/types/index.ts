@@ -24,6 +24,8 @@ export interface AutocompleteSuggestion {
   placeId: string;
   name: string;
   address: string;
+  /** Text Search 経由で取れた場合のみ含まれる。あれば Place Details を省ける */
+  location?: LatLng;
 }
 
 /** 候補駅 + 各メンバーからの距離 */

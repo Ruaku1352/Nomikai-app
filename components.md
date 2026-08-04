@@ -37,7 +37,7 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 
 | ファイル | 役割 |
 |---|---|
-| `src/components/StationInput.tsx` | 駅名オートコンプリート。**1文字目から部分一致で最大5件**表示、一致部分をハイライト、↑↓/Enter/Escでキーボード操作。**250msデバウンス**・入力中断時は `AbortController` でキャンセル。候補選択時に Place Details で緯度経度を解決する |
+| `src/components/StationInput.tsx` | 駅名オートコンプリート。**1文字目から部分一致で最大5件**表示、一致部分をハイライト、↑↓/Enter/Escでキーボード操作。**250msデバウンス**・入力中断時は `AbortController` でキャンセル。**IME変換中は検索せず、変換確定のEnterを候補選択と取り違えない**。候補選択時に Place Details で緯度経度を解決する |
 | `src/components/StationCard.tsx` | 駅カード（アコーディオン）。平均/最長の距離サマリ、メンバー別の距離、地図リンク、ジャンル別の店舗リスト |
 | `src/components/VenueCard.tsx` | 店カード。写真、店名、星評価、レビュー件数、価格帯、駅からの徒歩分、営業中バッジ、営業時間。タップでGoogleマップへ遷移 |
 
@@ -65,10 +65,61 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 
 ## バックエンド（`functions/`）
 
-### 駅の検索（全国カバレッジ）
+### 駅の検索（多段フォールバック）
 
-Places API はGoogleのPOIデータベースなので、**47都道府県すべての駅が対象**です。
-ただし取りこぼしを防ぐため、primary type の絞り込みを次のようにしています。
+**Text Search を主経路にしています。** Autocomplete の `includedPrimaryTypes` に
+駅タイプを指定すると、日本の主要駅（東京・新宿・渋谷・恵比寿・目黒など）が候補に
+出てこない事象が本番で確認されたためです。Autocomplete の候補は primary type が
+Table B（geocode / establishment 等）になることがあり、Table A の駅タイプでの
+絞り込みと噛み合いません。
+
+| 順 | 経路 | いつ動くか |
+|---|---|---|
+| 0 | メモリキャッシュ（10分） | 同じ入力の再検索。Google を呼ばない |
+| 1 | **Text Search** | 主経路。実在の場所を返すので駅を取りこぼさず、**緯度経度も返る**ので選択時の Place Details を省ける |
+| 2 | Autocomplete（駅タイプ指定） | 件数が足りず、かつ完全一致も無いときだけ（単価が安い） |
+| 3 | Autocomplete（タイプ指定なし） | 上記が0件のとき。名前が「〇〇駅」で終わるものだけ残す |
+
+完全一致の駅が取れていれば件数が5に満たなくても打ち切るため、**通常はGoogleへのコールは1回**です。
+全経路が失敗した場合は「0件」ではなくエラーを返します（設定不備を0件で隠さないため）。
+
+駅の判定は**名前が「駅 / 停留場 / 停留所」で終わること**を要求します。
+「東京駅一番街」のような “駅を含むだけ” の商業施設を弾くためです。
+
+`?debug=1` を付けると `trace.stages` にどの段階が何件返したかが入るので、
+0件になったときの切り分けができます。
+
+### 駅名一致・全国カバレッジ
+
+**駅名への一致を優先する。** Places Autocomplete は住所も部分一致の対象にするため、
+素で使うと「渋谷」に対して代官山駅・代々木公園駅（どちらも渋谷区）が返ってきます。
+そこで `rankByNameMatch()` で駅名側の一致度を採点し、住所だけが一致した候補は捨てます。
+
+| スコア | 条件 | 例（入力「渋谷」） |
+|---|---|---|
+| 3 | 完全一致 | 渋谷駅 |
+| 2 | 前方一致 | 渋谷ヒカリエ駅 |
+| 1 | 部分一致 | 新渋谷駅 |
+| 0 | 駅名に含まれない → **捨てる** | 代官山駅、代々木公園駅 |
+
+**1件も一致しなかった場合の扱いは入力の種類で変えます。**
+
+- **漢字を含む入力**（渋谷 / 渋谷駅）: 駅名と直接照合できるはずなので、一致が無い＝
+  無関係な候補しか無いということ。**空を返します。** 以前はGoogleの順序をそのまま
+  返していたため、「渋谷駅」の候補に代官山駅・代々木公園駅・雨晴駅（富山県）のような
+  無関係な駅が出ていました
+- **かな・ローマ字入力**（しぶや / shibuya）: 漢字の駅名と文字列照合できず、Googleが
+  読みで拾ってくれています。ここで捨てると候補が全滅するのでGoogleの順序を使います
+
+- 比較前に NFKC 正規化・カタカナ→ひらがな・末尾の「駅」除去を行うので、
+  「シブヤ」「渋谷駅」「ｼﾌﾞﾔ」はすべて同じ扱いになります
+- 同名の駅（JRと地下鉄で別 placeId）は1件にまとめます
+- Autocomplete は1回で最大5件しか返さないため、駅名一致だけで5件に満たないときに限り
+  言い換えたクエリで引き直して補充します（コールは1入力あたり最大2回）
+  - 「渋谷」→「渋谷駅」で補充（住所一致を弾いたぶんを埋める）
+  - 「渋谷駅」→「渋谷」で補充（「駅」付きだとGoogle側の候補が減ることがある）
+
+取りこぼしを防ぐため、primary type の絞り込みは次のようにしています。
 
 - `train_station` / `subway_station` / `light_rail_station` / `transit_station` の4種で検索
   （`light_rail_station` は路面電車・モノレール・新交通、`transit_station` は事業者によって
@@ -84,7 +135,7 @@ Places API はGoogleのPOIデータベースなので、**47都道府県すべ�
 
 | メソッド | パス | 使用API | 内容 |
 |---|---|---|---|
-| GET | `/api/stations/autocomplete?q=&limit=` | Places Autocomplete | 駅タイプ4種に限定して部分一致検索（既定5件）。0件または型が拒否された場合はタイプ指定なしで再検索 |
+| GET | `/api/stations/autocomplete?q=&limit=` | Places Autocomplete | 駅タイプ4種に限定して部分一致検索し、駅名一致順に既定5件返す。件数が足りなければ「〇〇駅」で補充、0件または型が拒否された場合はタイプ指定なしで再検索 |
 | GET | `/api/stations/:placeId` | Place Details | 駅の緯度経度・住所を解決 |
 | POST | `/api/candidates` | Nearby Search | 候補駅のリストアップと、各メンバーからの直線距離の算出 |
 | POST | `/api/venues` | Text Search | ジャンル別に店舗を検索し、加重スコア順の上位3件を返す |
@@ -99,8 +150,8 @@ Places API はGoogleのPOIデータベースなので、**47都道府県すべ�
 |---|---|
 | `functions/src/index.ts` | Express ルーティング、入力バリデーション、候補駅の絞り込み、距離とスコアの集計、エラーハンドリング |
 | `functions/src/google.ts` | Places API (New) のラッパー。APIキーの取得と、上流エラーの秘匿（キー情報を含みうる本文はクライアントに返さない） |
-| `functions/src/util.ts` | `haversineMeters()`、`summarizeCosts()`、`weightedScore()`、`isOpenAt()`（営業時間判定） |
-| `functions/test/util.test.js` | 上記の純粋関数のユニットテスト（node:test、21件） |
+| `functions/src/util.ts` | `haversineMeters()`、`summarizeCosts()`、`weightedScore()`、`isOpenAt()`（営業時間判定）、`rankByNameMatch()`（駅名一致の採点） |
+| `functions/test/util.test.js` | 上記の純粋関数のユニットテスト（node:test、39件） |
 
 ---
 
@@ -159,6 +210,9 @@ score_max(駅) = max(各メンバーの距離)
 - 距離計算はサーバ内で完結するため、この部分の課金は発生しない
 - 候補駅の上限 `MAX_CANDIDATES`、店の検索半径 `VENUE_RADIUS_METERS` は `functions/src/index.ts` の定数で調整可能
 - ジャンルは最大5件までに制限（Text Searchのコール数抑制）
+- 駅検索は Text Search が主経路（単価が高い）。完全一致が取れたら即打ち切り、
+  10分のメモリキャッシュを挟むことで、通常はGoogleへのコールを1入力1回に抑えている
+- 入力のデバウンスは350ms
 - Places の結果はサーバ側で永続キャッシュしない
 
 ---
@@ -168,14 +222,14 @@ score_max(駅) = max(各メンバーの距離)
 | 対象 | 状態 |
 |---|---|
 | フロントエンド / functions のビルド | 通過 |
-| 距離計算・スコア集計・加重スコア・営業時間判定 | ユニットテスト21件が通過（`npm --prefix functions test`） |
+| 距離計算・スコア集計・加重スコア・営業時間判定・駅名マッチング | ユニットテスト39件が通過（`npm --prefix functions test`） |
 | 全エンドポイントの疎通・レスポンス整形・エラー処理 | Places APIをモックして確認。Routes API が呼ばれないことも確認済み |
 | **実APIキーを使った動作** | **未検証** |
 
 実APIでの検証はローカル環境で行う前提です。特に以下は実際に叩いてみないと確定しません。
 
 - 重心半径 `spread * 0.6` と重複判定 400m の妥当性（いずれも実データ未検証の暫定値）
-- Autocomplete が日本の駅名で妥当な候補を返すか
+- 駅名一致のフィルタで候補が減りすぎないか（補充クエリで5件まで埋まるか）
 - Nearby Search の `rankPreference: POPULARITY` が主要ターミナル駅を上位に返すか
 - Text Search のクエリ形式と半径800mの妥当性
 
@@ -187,8 +241,9 @@ score_max(駅) = max(各メンバーの距離)
 npm --prefix functions test   # ビルド後に node:test を実行（APIキー不要）
 ```
 
-`functions/test/util.test.js` に21件。距離計算（対称性・経度180度跨ぎを含む）、
-スコア集計、加重スコア、営業時間判定（深夜の日跨ぎ・週の折り返し）をカバーしています。
+`functions/test/util.test.js` に33件。距離計算（対称性・経度180度跨ぎを含む）、
+スコア集計、加重スコア、営業時間判定（深夜の日跨ぎ・週の折り返し）、
+駅名マッチング（住所だけ一致した駅の除外、かな入力、同名駅の統合）をカバーしています。
 
 ---
 
