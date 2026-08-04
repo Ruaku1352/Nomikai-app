@@ -26,22 +26,22 @@ export interface AutocompleteSuggestion {
   address: string;
 }
 
-/** 候補駅 + 各メンバーの所要時間 */
+/** 候補駅 + 各メンバーからの距離 */
 export interface CandidateStation {
   placeId: string;
   name: string;
   address?: string;
   location: LatLng;
-  /** memberId -> 所要時間(分)。到達不能なら null */
-  durations: Record<string, number | null>;
-  /** memberId -> 乗換回数 */
-  transfers: Record<string, number | null>;
-  /** 全員分の合計（分）。到達不能な人がいる場合は Infinity 扱いにせず null */
-  sumMinutes: number | null;
-  /** 一番遠い人の所要時間（分） */
-  maxMinutes: number | null;
-  /** 同点時のタイブレーク用（乗換回数の合計） */
-  totalTransfers: number;
+  /** memberId -> 直線距離(m) */
+  distances: Record<string, number>;
+  /** 全員分の距離の合計(m) */
+  sumMeters: number;
+  /** 一番遠い人の距離(m) */
+  maxMeters: number;
+  /** 平均距離(m) */
+  avgMeters: number;
+  /** 全員の重心からの距離(m)。同点時のタイブレークに使う */
+  centroidMeters: number;
 }
 
 export type SortMode = 'sum' | 'max';

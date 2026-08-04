@@ -9,10 +9,14 @@ import {
   photoUri,
   placeDetails,
   searchVenues,
-  transitMatrix,
   type LatLng,
 } from './google';
-import { haversineMeters, isOpenAt, weightedScore } from './util';
+import {
+  haversineMeters,
+  isOpenAt,
+  summarizeCosts,
+  weightedScore,
+} from './util';
 
 /**
  * APIキーは Secret Manager 経由で注入する。
@@ -21,7 +25,7 @@ import { haversineMeters, isOpenAt, weightedScore } from './util';
  */
 const GOOGLE_MAPS_API_KEY = defineSecret('GOOGLE_MAPS_API_KEY');
 
-/** 候補駅の上限。人数×候補駅がそのままAPIコール数（またはマトリクス要素数）になる。 */
+/** 候補駅の上限。Nearby Search の結果からこの件数まで絞る。 */
 const MAX_CANDIDATES = 15;
 /** 店を探す半径（駅からの徒歩圏） */
 const VENUE_RADIUS_METERS = 800;
@@ -68,14 +72,16 @@ interface CandidateRequestMember {
 }
 
 /**
- * 4.1 候補駅のリストアップ + 4.2 所要時間マトリクスの取得。
- * 重心の周辺から候補駅を拾い、遠すぎる駅を落としてから所要時間を1回で取得する。
+ * 4.1 候補駅のリストアップ + 4.2 距離の算出。
+ *
+ * 所要時間ではなく直線距離で評価する。Routes API の TRANSIT モードは
+ * 日本国内の公共交通をサポートしておらず（200 OK のまま routes が空で返る）、
+ * 電車の所要時間は取得できないため。詳細は docs/spec.md の 2.2 を参照。
  */
 router.post(
   '/candidates',
   wrap(async (req, res) => {
   const members = (req.body?.members ?? []) as CandidateRequestMember[];
-  const departureTime = (req.body?.departureTime ?? null) as string | null;
   const requested = Number(req.body?.maxCandidates ?? 12);
 
   if (!Array.isArray(members) || members.length < 2) {
@@ -120,45 +126,25 @@ router.post(
     return;
   }
 
-  const matrix = await transitMatrix(
-    members.map((m) => m.location),
-    candidates.map((c) => c.location),
-    departureTime,
-  );
-
-  const stations = candidates.map((station, d) => {
-    const durations: Record<string, number | null> = {};
-    const transfers: Record<string, number | null> = {};
-    let sum = 0;
-    let max = 0;
-    let totalTransfers = 0;
-    let reachable = true;
-
-    members.forEach((m, o) => {
-      const cell = matrix[o]?.[d] ?? { minutes: null, transfers: null };
-      // 自分の最寄駅が候補になった場合は0分扱い（経路が返らないことがある）
-      const isOwnStation =
-        haversineMeters(m.location, station.location) < 300;
-      const minutes = cell.minutes ?? (isOwnStation ? 0 : null);
-
-      durations[m.id] = minutes;
-      transfers[m.id] = cell.transfers;
-      if (minutes == null) {
-        reachable = false;
-      } else {
-        sum += minutes;
-        max = Math.max(max, minutes);
-      }
-      totalTransfers += cell.transfers ?? 0;
+  // 距離の計算に外部APIは不要。全メンバー × 全候補駅をその場で算出する。
+  const stations = candidates.map((station) => {
+    const distances: Record<string, number> = {};
+    members.forEach((m) => {
+      distances[m.id] = Math.round(
+        haversineMeters(m.location, station.location),
+      );
     });
+
+    const { sum, max, avg } = summarizeCosts(Object.values(distances));
 
     return {
       ...station,
-      durations,
-      transfers,
-      sumMinutes: reachable ? Math.round(sum) : null,
-      maxMinutes: reachable ? Math.round(max) : null,
-      totalTransfers,
+      distances,
+      sumMeters: Math.round(sum),
+      maxMeters: Math.round(max),
+      avgMeters: Math.round(avg),
+      // 同点時のタイブレーク用（重心に近い駅を優先する）
+      centroidMeters: Math.round(haversineMeters(center, station.location)),
     };
   });
 

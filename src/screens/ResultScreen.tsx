@@ -69,7 +69,7 @@ export function ResultScreen() {
             sortMode === 'sum' ? 'bg-accent text-black' : 'text-white/60'
           }`}
         >
-          合計時間が短い
+          合計距離が短い
         </button>
         <button
           type="button"
@@ -79,7 +79,7 @@ export function ResultScreen() {
             sortMode === 'max' ? 'bg-accent text-black' : 'text-white/60'
           }`}
         >
-          一番遠い人が短い
+          一番遠い人が近い
         </button>
       </div>
 
@@ -103,8 +103,8 @@ export function ResultScreen() {
       </div>
 
       <p className="pb-6 text-[11px] leading-relaxed text-white/30">
-        所要時間は Google Routes API（電車・乗換込み）の推定値です。お店の情報は
-        Google Places
+        駅の順位は<strong className="text-white/50">直線距離をもとにした目安</strong>
+        です。実際の電車での所要時間とは異なります。お店の情報は Google Places
         のデータで、表示時点のものです。最新の営業状況は各店舗にご確認ください。
       </p>
     </div>

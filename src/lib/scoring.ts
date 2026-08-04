@@ -2,35 +2,28 @@ import type { CandidateStation, SortMode, Venue } from '../types';
 
 /**
  * 4.3 スコアリング
- * score_sum = Σ(各メンバーの所要時間) / score_max = max(各メンバーの所要時間)
- * 到達できないメンバーがいる駅は候補から落とす（sumMinutes/maxMinutes が null）。
- * スコアが同点の場合は乗換回数の合計が少ない方を優先。
+ * score_sum = Σ(各メンバーの距離) / score_max = max(各メンバーの距離)
+ * 同点・僅差の場合は全員の重心に近い駅を優先する。
  */
 export function rankStations(
   stations: CandidateStation[],
   mode: SortMode,
   limit = 3,
 ): CandidateStation[] {
-  const reachable = stations.filter(
-    (s) => s.sumMinutes !== null && s.maxMinutes !== null,
-  );
-
   const scoreOf = (s: CandidateStation) =>
-    mode === 'sum' ? (s.sumMinutes as number) : (s.maxMinutes as number);
+    mode === 'sum' ? s.sumMeters : s.maxMeters;
 
-  return [...reachable]
+  return [...stations]
     .sort((a, b) => {
       const diff = scoreOf(a) - scoreOf(b);
       if (diff !== 0) return diff;
-      // 僅差・同着は乗換回数が少ない方を優先
-      const t = a.totalTransfers - b.totalTransfers;
-      if (t !== 0) return t;
+      // 乗換回数が取れないため、重心に近い方をタイブレークに使う
+      const c = a.centroidMeters - b.centroidMeters;
+      if (c !== 0) return c;
       // それでも同じなら「もう一方の指標」で比較
-      const other =
-        mode === 'sum'
-          ? (a.maxMinutes as number) - (b.maxMinutes as number)
-          : (a.sumMinutes as number) - (b.sumMinutes as number);
-      return other;
+      return mode === 'sum'
+        ? a.maxMeters - b.maxMeters
+        : a.sumMeters - b.sumMeters;
     })
     .slice(0, limit);
 }
@@ -63,9 +56,9 @@ export function centroid(points: { lat: number; lng: number }[]) {
   return { lat: sum.lat / points.length, lng: sum.lng / points.length };
 }
 
-export function formatMinutes(minutes: number | null): string {
-  if (minutes == null) return '—';
-  const m = Math.round(minutes);
-  if (m < 60) return `${m}分`;
-  return `${Math.floor(m / 60)}時間${m % 60}分`;
+/** メートルを表示用の文字列にする（1km未満はm、それ以上はkm） */
+export function formatDistance(meters: number | null | undefined): string {
+  if (meters == null || !Number.isFinite(meters)) return '—';
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  return `${(meters / 1000).toFixed(1)}km`;
 }

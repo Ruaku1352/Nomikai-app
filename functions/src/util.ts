@@ -16,6 +16,28 @@ export function haversineMeters(a: LatLng, b: LatLng): number {
 }
 
 /**
+ * 候補駅1件分のコスト集計。
+ *
+ * 引数の `costs` は「各メンバーから候補駅までのコスト」で、単位には依存しない。
+ * 現在は直線距離(m)を渡しているが、将来 乗換API（駅すぱあと / NAVITIME 等）を
+ * 導入して所要時間(分)が取れるようになった場合は、ここに分を渡すだけで
+ * スコアリングの構造はそのまま使える。
+ */
+export function summarizeCosts(costs: number[]): {
+  sum: number;
+  max: number;
+  avg: number;
+} {
+  if (costs.length === 0) return { sum: 0, max: 0, avg: 0 };
+  const sum = costs.reduce((a, c) => a + c, 0);
+  return {
+    sum,
+    max: Math.max(...costs),
+    avg: sum / costs.length,
+  };
+}
+
+/**
  * 4.4 レビュー数を加味した評価スコア。
  * rating * log(user_ratings_total + 1) で、件数の少ない高評価店を過大評価しない。
  */

@@ -1,5 +1,5 @@
 import type { CandidateStation, Member, SortMode, VenueGroup } from '../types';
-import { formatMinutes } from '../lib/scoring';
+import { formatDistance } from '../lib/scoring';
 import { VenueCard } from './VenueCard';
 
 interface Props {
@@ -39,10 +39,10 @@ export function StationCard({
             {station.name}
           </span>
           <span className="block text-xs text-white/50">
-            合計 {formatMinutes(station.sumMinutes)} / 最長{' '}
-            {formatMinutes(station.maxMinutes)}
+            平均 {formatDistance(station.avgMeters)} / 最長{' '}
+            {formatDistance(station.maxMeters)}
             <span className="ml-2 text-accent">
-              {sortMode === 'sum' ? '合計最小で選出' : '最長最小で選出'}
+              {sortMode === 'sum' ? '合計距離が最小' : '最長距離が最小'}
             </span>
           </span>
         </span>
@@ -57,7 +57,7 @@ export function StationCard({
       {expanded && (
         <div className="border-t border-white/10 p-4">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">
-            メンバー別の所要時間
+            メンバー別の距離（直線）
           </h3>
           <ul className="mb-4 space-y-1">
             {members.map((m, i) => (
@@ -69,12 +69,7 @@ export function StationCard({
                   </span>
                 </span>
                 <span className="ml-2 shrink-0 text-white">
-                  {formatMinutes(station.durations[m.id] ?? null)}
-                  {station.transfers[m.id] != null && (
-                    <span className="ml-1 text-xs text-white/40">
-                      乗換{station.transfers[m.id]}回
-                    </span>
-                  )}
+                  {formatDistance(station.distances[m.id])}
                 </span>
               </li>
             ))}

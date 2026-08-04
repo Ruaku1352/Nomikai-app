@@ -59,12 +59,11 @@ export function resolveStation(placeId: string): Promise<StationRef> {
 }
 
 /**
- * 4.1 + 4.2: 候補駅のリストアップと所要時間マトリクスの取得をまとめて依頼する。
+ * 4.1 + 4.2: 候補駅のリストアップと各メンバーからの距離をまとめて取得する。
  * 候補駅の絞り込み（maxCandidates）はサーバ側でも上限が効く。
  */
 export function fetchCandidates(params: {
   members: Member[];
-  departureTime?: string | null;
   maxCandidates?: number;
 }): Promise<{ stations: CandidateStation[] }> {
   return request('/candidates', {
@@ -78,7 +77,6 @@ export function fetchCandidates(params: {
           location: m.station!.location as LatLng,
           stationName: m.station!.name,
         })),
-      departureTime: params.departureTime ?? null,
       maxCandidates: params.maxCandidates ?? 12,
     }),
   });

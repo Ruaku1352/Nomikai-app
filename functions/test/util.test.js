@@ -1,0 +1,148 @@
+// node:test で実行する。ビルド済みの lib/ を対象にするため、事前に `npm run build` が必要。
+//   npm --prefix functions test
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const {
+  haversineMeters,
+  summarizeCosts,
+  weightedScore,
+  isOpenAt,
+} = require('../lib/util');
+
+/* ------------------------------------------------------------ 距離計算 */
+
+test('haversineMeters: 同一地点は0m', () => {
+  const p = { lat: 35.658, lng: 139.7016 };
+  assert.equal(haversineMeters(p, p), 0);
+});
+
+test('haversineMeters: 渋谷駅↔新宿駅はおよそ3.5km', () => {
+  const shibuya = { lat: 35.658, lng: 139.7016 };
+  const shinjuku = { lat: 35.6896, lng: 139.7006 };
+  const d = haversineMeters(shibuya, shinjuku);
+  assert.ok(d > 3400 && d < 3600, `expected ~3.5km but got ${d}`);
+});
+
+test('haversineMeters: 東京↔大阪はおよそ400km', () => {
+  const tokyo = { lat: 35.6812, lng: 139.7671 };
+  const osaka = { lat: 34.7025, lng: 135.4959 };
+  const d = haversineMeters(tokyo, osaka);
+  assert.ok(d > 390_000 && d < 410_000, `expected ~400km but got ${d}`);
+});
+
+test('haversineMeters: 対称である', () => {
+  const a = { lat: 35.6812, lng: 139.7671 };
+  const b = { lat: 34.7025, lng: 135.4959 };
+  assert.equal(haversineMeters(a, b), haversineMeters(b, a));
+});
+
+test('haversineMeters: 緯度1度はおよそ111km', () => {
+  const d = haversineMeters({ lat: 35, lng: 139 }, { lat: 36, lng: 139 });
+  assert.ok(d > 110_000 && d < 112_000, `expected ~111km but got ${d}`);
+});
+
+test('haversineMeters: 経度180度をまたいでも最短距離を返す', () => {
+  const d = haversineMeters({ lat: 0, lng: 179.9 }, { lat: 0, lng: -179.9 });
+  // 0.2度 ≒ 22km。地球を逆回りした 約4万km にはならないこと
+  assert.ok(d < 30_000, `expected short way around but got ${d}`);
+});
+
+/* --------------------------------------------------------- スコア集計 */
+
+test('summarizeCosts: 合計・最大・平均を返す', () => {
+  assert.deepEqual(summarizeCosts([1000, 2000, 3000]), {
+    sum: 6000,
+    max: 3000,
+    avg: 2000,
+  });
+});
+
+test('summarizeCosts: 空配列でも落ちない', () => {
+  assert.deepEqual(summarizeCosts([]), { sum: 0, max: 0, avg: 0 });
+});
+
+test('summarizeCosts: 1人なら合計＝最大＝平均', () => {
+  assert.deepEqual(summarizeCosts([1500]), {
+    sum: 1500,
+    max: 1500,
+    avg: 1500,
+  });
+});
+
+test('summarizeCosts: 単位に依存しない（分を渡しても同じ形で返る）', () => {
+  // 将来 乗換API を導入して所要時間(分)を渡す場合の想定
+  assert.deepEqual(summarizeCosts([10, 25, 40]), { sum: 75, max: 40, avg: 25 });
+});
+
+test('summarizeCosts: 合計は同じでも最大値で優劣がつく', () => {
+  // 「合計最小」では引き分けだが「最長最小」では均等な方が勝つケース
+  const balanced = summarizeCosts([3000, 3000]);
+  const skewed = summarizeCosts([1000, 5000]);
+  assert.equal(balanced.sum, skewed.sum);
+  assert.ok(balanced.max < skewed.max);
+});
+
+/* ------------------------------------------------------- 店舗のスコア */
+
+test('weightedScore: レビュー数が多い方が優先される', () => {
+  const few = weightedScore(4.6, 5);
+  const many = weightedScore(4.1, 900);
+  assert.ok(many > few, 'レビュー5件の4.6より、900件の4.1を上位にする');
+});
+
+test('weightedScore: 評価なしは0', () => {
+  assert.equal(weightedScore(null, 100), 0);
+  assert.equal(weightedScore(undefined, 100), 0);
+});
+
+test('weightedScore: レビュー0件は0', () => {
+  assert.equal(weightedScore(5, 0), 0);
+  assert.equal(weightedScore(5, undefined), 0);
+});
+
+/* --------------------------------------------------------- 営業時間 */
+
+// 月曜 17:00 〜 翌2:00 の店
+const lateNight = {
+  periods: [
+    { open: { day: 1, hour: 17, minute: 0 }, close: { day: 2, hour: 2, minute: 0 } },
+  ],
+};
+
+test('isOpenAt: 営業時間内はtrue（月曜19:30 JST）', () => {
+  assert.equal(isOpenAt(lateNight, new Date('2026-08-03T10:30:00Z')), true);
+});
+
+test('isOpenAt: 開店前はfalse（月曜15:00 JST）', () => {
+  assert.equal(isOpenAt(lateNight, new Date('2026-08-03T06:00:00Z')), false);
+});
+
+test('isOpenAt: 日をまたぐ深夜営業もtrue（火曜1:00 JST）', () => {
+  assert.equal(isOpenAt(lateNight, new Date('2026-08-03T16:00:00Z')), true);
+});
+
+test('isOpenAt: 閉店後はfalse（火曜3:00 JST）', () => {
+  assert.equal(isOpenAt(lateNight, new Date('2026-08-03T18:00:00Z')), false);
+});
+
+test('isOpenAt: 営業時間が不明な店は除外しない', () => {
+  assert.equal(isOpenAt(undefined, new Date()), true);
+  assert.equal(isOpenAt({}, new Date()), true);
+  assert.equal(isOpenAt({ periods: [] }, new Date()), true);
+});
+
+test('isOpenAt: 24時間営業（closeなし）は常にtrue', () => {
+  const always = { periods: [{ open: { day: 0, hour: 0, minute: 0 } }] };
+  assert.equal(isOpenAt(always, new Date()), true);
+});
+
+test('isOpenAt: 日曜から月曜へまたぐ営業（週の折り返し）', () => {
+  const sundayLate = {
+    periods: [
+      { open: { day: 0, hour: 20, minute: 0 }, close: { day: 1, hour: 1, minute: 0 } },
+    ],
+  };
+  // 2026-08-03 00:30 JST は月曜0:30 → 日曜20:00開始の区間内
+  assert.equal(isOpenAt(sundayLate, new Date('2026-08-02T15:30:00Z')), true);
+});

@@ -69,7 +69,7 @@ export function GenresScreen() {
           className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white focus:border-accent focus:outline-none"
         />
         <p className="mt-1 text-xs text-white/40">
-          電車の出発時刻と、お店の営業時間フィルタに使います。
+          お店の営業時間フィルタに使います。
         </p>
       </div>
 
@@ -80,13 +80,13 @@ export function GenresScreen() {
             active={sortMode === 'sum'}
             onClick={() => setSortMode('sum')}
             label="合計最小"
-            hint="全体の移動コスト重視"
+            hint="全員の距離の合計が短い"
           />
           <ModeButton
             active={sortMode === 'max'}
             onClick={() => setSortMode('max')}
             label="最長最小"
-            hint="一番遠い人の負担を軽く"
+            hint="一番遠い人の距離が短い"
           />
         </div>
       </div>

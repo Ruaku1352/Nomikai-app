@@ -32,7 +32,7 @@ interface AppState {
   genres: string[];
   /** 自由入力ジャンル（「その他」欄） */
   customGenre: string;
-  /** 集合したい時間帯（HH:mm）。営業時間フィルタと出発時刻に使う */
+  /** 集合したい時間帯（HH:mm）。お店の営業時間フィルタに使う */
   meetTime: string;
   sortMode: SortMode;
   loading: boolean;
@@ -59,6 +59,12 @@ interface AppState {
   /** 指標を切り替えて新しく上位に来た駅の店舗を、必要になった時だけ取りに行く */
   ensureVenues: (placeId: string) => Promise<void>;
 }
+
+/** localStorage に保存する範囲（partialize と対応させる） */
+type PersistedState = Pick<
+  AppState,
+  'members' | 'genres' | 'customGenre' | 'meetTime' | 'sortMode' | 'result'
+>;
 
 const MAX_MEMBERS = 10;
 const MIN_MEMBERS = 2;
@@ -161,15 +167,12 @@ export const useAppStore = create<AppState>()(
         set({
           loading: true,
           error: null,
-          loadingMessage: '候補駅と所要時間を計算中…',
+          loadingMessage: '候補駅を探しています…',
         });
 
         try {
-          const departureTime = meetTime ? toIsoDeparture(meetTime) : null;
-          const { stations } = await fetchCandidates({
-            members: ready,
-            departureTime,
-          });
+          const openAt = meetTime ? toIsoMeetTime(meetTime) : null;
+          const { stations } = await fetchCandidates({ members: ready });
 
           const top: CandidateStation[] = rankStations(stations, sortMode, 3);
           if (top.length === 0) {
@@ -177,7 +180,7 @@ export const useAppStore = create<AppState>()(
               loading: false,
               loadingMessage: '',
               error:
-                '全員が電車で到達できる候補駅が見つかりませんでした。駅名を見直すか、時間帯を変えて試してください。',
+                '候補になる駅が見つかりませんでした。入力した駅名を見直して試してください。',
             });
             return;
           }
@@ -193,7 +196,7 @@ export const useAppStore = create<AppState>()(
                 location: station.location,
               },
               genres,
-              openAt: departureTime,
+              openAt,
             });
             venuesByStation[station.placeId] = groups;
           }
@@ -240,7 +243,7 @@ export const useAppStore = create<AppState>()(
               location: station.location,
             },
             genres: result.genres,
-            openAt: meetTime ? toIsoDeparture(meetTime) : null,
+            openAt: meetTime ? toIsoMeetTime(meetTime) : null,
           });
           set((s) => ({
             loading: false,
@@ -267,6 +270,14 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'nomikai-app',
+      // v1 は所要時間ベース（sumMinutes / durations）の結果を保存していた。
+      // 形が変わったので、保存済みの結果だけ捨てて入力内容は引き継ぐ。
+      version: 2,
+      migrate: (persisted, version) => {
+        const state = persisted as PersistedState;
+        if (state && version < 2) return { ...state, result: null };
+        return state;
+      },
       partialize: (s) => ({
         members: s.members,
         genres: s.genres,
@@ -280,7 +291,7 @@ export const useAppStore = create<AppState>()(
 );
 
 /** "19:30" → 直近のその時刻のISO文字列（過ぎていれば翌日） */
-function toIsoDeparture(hhmm: string): string {
+function toIsoMeetTime(hhmm: string): string {
   const [h, m] = hhmm.split(':').map(Number);
   const now = new Date();
   const target = new Date(now);

@@ -10,7 +10,8 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",
-    "deploy": "npm run build && firebase deploy --only functions"
+    "deploy": "npm run build && firebase deploy --only functions",
+    "test": "npm run build && node --test test/*.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

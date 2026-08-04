@@ -14,7 +14,7 @@
 Cloud Functions（api / asia-northeast1）
   │  X-Goog-Api-Key            ← キーはここだけが持つ
   ▼
-Google Maps Platform（Places API (New) / Routes API）
+Google Maps Platform（Places API (New)）
 ```
 
 Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます（`firebase.json`）。
@@ -30,7 +30,7 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 |---|---|
 | `src/App.tsx` | 3ステップのタブナビゲーション、ローディングオーバーレイ、エラー表示、オンライン/オフライン検知 |
 | `src/screens/MembersScreen.tsx` | 人数指定（2〜10人）と各メンバーの最寄駅入力。2人以上の駅が確定するまで次へ進めない |
-| `src/screens/GenresScreen.tsx` | ジャンル選択（居酒屋 / 焼肉 / しゃぶしゃぶ / 寿司 + 自由入力）、集合時間帯（任意）、指標の初期選択、検索実行 |
+| `src/screens/GenresScreen.tsx` | ジャンル選択（居酒屋 / 焼肉 / しゃぶしゃぶ / 寿司 + 自由入力）、集合時間帯（任意・お店の営業時間フィルタ用）、指標の初期選択、検索実行 |
 | `src/screens/ResultScreen.tsx` | 上位3駅の表示、指標の切替、アコーディオンの開閉と店舗の遅延取得 |
 
 ### コンポーネント
@@ -38,7 +38,7 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 | ファイル | 役割 |
 |---|---|
 | `src/components/StationInput.tsx` | 駅名オートコンプリート。**250msデバウンス**・2文字未満は送信しない・入力中断時は `AbortController` でキャンセル。候補選択時に Place Details で緯度経度を解決する |
-| `src/components/StationCard.tsx` | 駅カード（アコーディオン）。合計/最長の所要時間サマリ、メンバー別の所要時間・乗換回数、地図リンク、ジャンル別の店舗リスト |
+| `src/components/StationCard.tsx` | 駅カード（アコーディオン）。平均/最長の距離サマリ、メンバー別の距離、地図リンク、ジャンル別の店舗リスト |
 | `src/components/VenueCard.tsx` | 店カード。写真、店名、星評価、レビュー件数、価格帯、駅からの徒歩分、営業中バッジ、営業時間。タップでGoogleマップへ遷移 |
 
 ### ロジック / 状態
@@ -47,7 +47,7 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 |---|---|
 | `src/store/useAppStore.ts` | Zustand + persist。入力状態と**直前の検索結果**を localStorage に保存（オフライン閲覧用）。`search()` と `ensureVenues()` を持つ |
 | `src/lib/api.ts` | `/api/**` へのクライアント。エラーレスポンスを日本語メッセージに変換する `ApiError` |
-| `src/lib/scoring.ts` | `rankStations()`（指標別の並べ替え）、`weightedScore()`、`centroid()`、`formatMinutes()` |
+| `src/lib/scoring.ts` | `rankStations()`（指標別の並べ替え）、`weightedScore()`、`centroid()`、`formatDistance()` |
 | `src/types/index.ts` | フロント・バックエンド共通のデータ形状 |
 
 **状態の持ち方のポイント**：`search()` は上位3駅だけでなく**全候補駅**を `result.stations` に保持します。
@@ -71,7 +71,7 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 |---|---|---|---|
 | GET | `/api/stations/autocomplete?q=` | Places Autocomplete | `train_station` / `subway_station` に限定、`languageCode=ja` |
 | GET | `/api/stations/:placeId` | Place Details | 駅の緯度経度・住所を解決 |
-| POST | `/api/candidates` | Nearby Search + Routes | 候補駅のリストアップと所要時間マトリクス |
+| POST | `/api/candidates` | Nearby Search | 候補駅のリストアップと、各メンバーからの直線距離の算出 |
 | POST | `/api/venues` | Text Search | ジャンル別に店舗を検索し、加重スコア順の上位3件を返す |
 | GET | `/api/photo?name=` | Place Photo | 署名付きURLへ302リダイレクト（キーを露出させない） |
 
@@ -81,9 +81,10 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 
 | ファイル | 役割 |
 |---|---|
-| `functions/src/index.ts` | Express ルーティング、入力バリデーション、候補駅の絞り込み、スコア集計、エラーハンドリング |
-| `functions/src/google.ts` | Google Maps Platform のラッパー。APIキーの取得と、上流エラーの秘匿（キー情報を含みうる本文はクライアントに返さない） |
-| `functions/src/util.ts` | `haversineMeters()`、`weightedScore()`、`isOpenAt()`（営業時間判定） |
+| `functions/src/index.ts` | Express ルーティング、入力バリデーション、候補駅の絞り込み、距離とスコアの集計、エラーハンドリング |
+| `functions/src/google.ts` | Places API (New) のラッパー。APIキーの取得と、上流エラーの秘匿（キー情報を含みうる本文はクライアントに返さない） |
+| `functions/src/util.ts` | `haversineMeters()`、`summarizeCosts()`、`weightedScore()`、`isOpenAt()`（営業時間判定） |
+| `functions/test/util.test.js` | 上記の純粋関数のユニットテスト（node:test、21件） |
 
 ---
 
@@ -100,23 +101,27 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 
 > 発展版（各メンバーの到達可能駅集合の積集合）は未実装です。
 
-### 所要時間マトリクス（仕様 4.2）
+### 距離の算出（仕様 4.2）
 
-- **ComputeRouteMatrix** を使い、「人数 × 候補駅」を **1コール**で取得
-- 失敗時のみ ComputeRoutes を1組ずつ叩くフォールバック（同時実行5本に制限）
-- 乗換回数はフォールバック時のみ取得できる（マトリクスは返さない）
-- 自分の最寄駅が候補になった場合（300m以内）は経路が返らなくても0分として扱う
-- 誰か1人でも到達できない駅は候補から除外する
+- 各メンバー駅 × 候補駅の**ハバサイン距離（大圏距離）**をサーバ内で計算。**外部APIは使わない**
+- メンバーが何人増えてもAPIコール数は変わらない
+- 集計は `summarizeCosts()`（合計 / 最大 / 平均）に切り出してあり、**単位に依存しない**。
+  将来 乗換API を導入したら距離(m)の代わりに所要時間(分)を渡すだけで同じ構造が使える
+
+> **電車の所要時間を使わない理由**
+> Routes API の `travelMode: TRANSIT` は日本国内の公共交通をサポートしておらず、
+> HTTP 200 のまま `routes` が空で返ります（DRIVEに変えると正常に返るため、キーや課金の問題ではない）。
+> 切り分けの詳細は `docs/spec.md` の 2.2 を参照してください。**再調査は不要です。**
 
 ### スコアリング（仕様 4.3）
 
 ```
-score_sum(駅) = Σ(各メンバーの所要時間)
-score_max(駅) = max(各メンバーの所要時間)
+score_sum(駅) = Σ(各メンバーの距離)
+score_max(駅) = max(各メンバーの距離)
 ```
 
-- UI上で「合計最小 / 最長最小」を切替
-- 同点時は**乗換回数の合計が少ない方**を優先。それも同じならもう一方の指標で比較
+- UI上で「合計最小 / 最長最小」を切替（指標の中身が距離になっただけで、UIの構造は変更なし）
+- 同点時は**全員の重心に近い駅**を優先。それも同じならもう一方の指標で比較
 
 ### 店舗検索・ソート（仕様 4.4）
 
@@ -134,6 +139,7 @@ score_max(駅) = max(各メンバーの所要時間)
 - 上流APIのエラー本文はそのまま返さず、汎用の日本語メッセージに置き換える
 - 写真プロキシは `places/{id}/photos/{id}` 形式のみ受け付ける（パス注入の防止）
 - 関数は `maxInstances: 10` / `timeoutSeconds: 60` で暴走を抑制
+- 距離計算はサーバ内で完結するため、この部分の課金は発生しない
 - 候補駅の上限 `MAX_CANDIDATES`、店の検索半径 `VENUE_RADIUS_METERS` は `functions/src/index.ts` の定数で調整可能
 - ジャンルは最大5件までに制限（Text Searchのコール数抑制）
 - Places の結果はサーバ側で永続キャッシュしない
@@ -145,21 +151,34 @@ score_max(駅) = max(各メンバーの所要時間)
 | 対象 | 状態 |
 |---|---|
 | フロントエンド / functions のビルド | 通過 |
-| 全エンドポイントの疎通・レスポンス整形・エラー処理 | Google APIをモックして確認 |
-| スコアリング、営業時間判定（日跨ぎ）、距離計算 | 単体で確認 |
+| 距離計算・スコア集計・加重スコア・営業時間判定 | ユニットテスト21件が通過（`npm --prefix functions test`） |
+| 全エンドポイントの疎通・レスポンス整形・エラー処理 | Places APIをモックして確認。Routes API が呼ばれないことも確認済み |
 | **実APIキーを使った動作** | **未検証** |
 
 実APIでの検証はローカル環境で行う前提です。特に以下は実際に叩いてみないと確定しません。
 
-- ComputeRouteMatrix が TRANSIT で期待通り動くか（動かない場合は自動でフォールバックするが、コール数が増えるため `MAX_CANDIDATES` の再調整が必要）
 - 重心半径 `spread * 0.6` と重複判定 400m の妥当性（いずれも実データ未検証の暫定値）
 - Autocomplete が日本の駅名で妥当な候補を返すか
+- Nearby Search の `rankPreference: POPULARITY` が主要ターミナル駅を上位に返すか
 - Text Search のクエリ形式と半径800mの妥当性
 
 ---
 
-## 未実装
+## テスト
+
+```bash
+npm --prefix functions test   # ビルド後に node:test を実行（APIキー不要）
+```
+
+`functions/test/util.test.js` に21件。距離計算（対称性・経度180度跨ぎを含む）、
+スコア集計、加重スコア、営業時間判定（深夜の日跨ぎ・週の折り返し）をカバーしています。
+
+---
+
+## 未実装 / 将来の拡張余地
 
 - Maps JavaScript API による地図のミニビュー（現状はGoogleマップへのリンクのみ）
 - 候補駅の発展版絞り込み（到達可能駅集合の積集合）
-- ユニットテスト（`functions/src/util.ts` はテストしやすい純関数として切り出し済み）
+- 駅データ.jp などの無料路線データを取り込み、「同一路線で乗換なしに行けるか」を加点要素にする
+- 有料の乗換API（駅すぱあと Web サービス、NAVITIME API 等）への差し替え。
+  `summarizeCosts()` に所要時間(分)を渡す形にすれば、スコアリングの構造はそのまま使える
