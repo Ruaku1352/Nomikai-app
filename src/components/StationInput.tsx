@@ -28,9 +28,14 @@ export function StationInput({ value, placeholder, onChange }: Props) {
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const skipNextFetch = useRef(false);
+  // 日本語入力の変換中は確定前の文字が流れてくるので、その間は検索しない
+  const [composing, setComposing] = useState(false);
 
   useEffect(() => {
-    setQuery(value?.name ?? '');
+    // 駅が確定したときだけ入力欄を同期する。
+    // value が null に戻ったとき（＝ユーザーが編集を始めたとき）に空にしてしまうと、
+    // 選択済みの状態から打ち直せなくなる。
+    if (value?.name) setQuery(value.name);
   }, [value?.placeId, value?.name]);
 
   useEffect(() => {
@@ -38,6 +43,7 @@ export function StationInput({ value, placeholder, onChange }: Props) {
       skipNextFetch.current = false;
       return;
     }
+    if (composing) return;
     const trimmed = query.trim();
     if (trimmed.length < 1) {
       setSuggestions([]);
@@ -74,7 +80,7 @@ export function StationInput({ value, placeholder, onChange }: Props) {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, composing]);
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -112,6 +118,8 @@ export function StationInput({ value, placeholder, onChange }: Props) {
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // 変換確定のEnterを候補選択と取り違えない
+    if (e.nativeEvent.isComposing || composing) return;
     if (!open || suggestions.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -144,6 +152,11 @@ export function StationInput({ value, placeholder, onChange }: Props) {
         }}
         onFocus={() => suggestions.length > 0 && setOpen(true)}
         onKeyDown={onKeyDown}
+        onCompositionStart={() => setComposing(true)}
+        onCompositionEnd={(e) => {
+          setComposing(false);
+          setQuery(e.currentTarget.value);
+        }}
         className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white placeholder:text-white/30 focus:border-accent focus:outline-none"
       />
       {pending && (

@@ -37,7 +37,7 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 
 | ファイル | 役割 |
 |---|---|
-| `src/components/StationInput.tsx` | 駅名オートコンプリート。**1文字目から部分一致で最大5件**表示、一致部分をハイライト、↑↓/Enter/Escでキーボード操作。**250msデバウンス**・入力中断時は `AbortController` でキャンセル。候補選択時に Place Details で緯度経度を解決する |
+| `src/components/StationInput.tsx` | 駅名オートコンプリート。**1文字目から部分一致で最大5件**表示、一致部分をハイライト、↑↓/Enter/Escでキーボード操作。**250msデバウンス**・入力中断時は `AbortController` でキャンセル。**IME変換中は検索せず、変換確定のEnterを候補選択と取り違えない**。候補選択時に Place Details で緯度経度を解決する |
 | `src/components/StationCard.tsx` | 駅カード（アコーディオン）。平均/最長の距離サマリ、メンバー別の距離、地図リンク、ジャンル別の店舗リスト |
 | `src/components/VenueCard.tsx` | 店カード。写真、店名、星評価、レビュー件数、価格帯、駅からの徒歩分、営業中バッジ、営業時間。タップでGoogleマップへ遷移 |
 
@@ -84,7 +84,9 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
   Googleが読みから拾ったケースを捨ててしまわないための保険です
 - 同名の駅（JRと地下鉄で別 placeId）は1件にまとめます
 - Autocomplete は1回で最大5件しか返さないため、駅名一致だけで5件に満たないときに限り
-  「〇〇駅」で引き直して補充します（Autocomplete のコールは1入力あたり最大2回）
+  言い換えたクエリで引き直して補充します（コールは1入力あたり最大2回）
+  - 「渋谷」→「渋谷駅」で補充（住所一致を弾いたぶんを埋める）
+  - 「渋谷駅」→「渋谷」で補充（「駅」付きだとGoogle側の候補が減ることがある）
 
 取りこぼしを防ぐため、primary type の絞り込みは次のようにしています。
 

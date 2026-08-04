@@ -3,7 +3,7 @@
  * APIキーはここ（サーバ側）だけで扱い、クライアントには絶対に出さない。
  */
 
-import { rankByNameMatch } from './util';
+import { rankByNameMatch, stripStationSuffix } from './util';
 
 const PLACES_BASE = 'https://places.googleapis.com/v1';
 
@@ -228,13 +228,17 @@ export async function autocompleteStations(
 
   let ranked = rankByNameMatch([...collected.values()], query, limit);
 
-  // 駅名一致が足りないときだけ「〇〇駅」で補充する
-  if (ranked.length < limit && !/(駅|停留場|停留所)$/.test(query)) {
+  // 駅名一致が足りないときだけ、言い換えたクエリで補充する。
+  //   「渋谷」  → 「渋谷駅」で引き直す（住所一致を弾いたぶんを埋める）
+  //   「渋谷駅」→ 「渋谷」で引き直す（「駅」付きだとGoogleの候補が減ることがある）
+  const stem = stripStationSuffix(query);
+  const alternate = stem === query ? `${query}駅` : stem;
+  if (ranked.length < limit && alternate && alternate !== query) {
     try {
-      add(await fetchAutocomplete(`${query}駅`, true));
+      add(await fetchAutocomplete(alternate, true));
       ranked = rankByNameMatch([...collected.values()], query, limit);
     } catch (e) {
-      console.warn('駅名での補充検索に失敗しました', e);
+      console.warn('補充検索に失敗しました', e);
     }
   }
 
