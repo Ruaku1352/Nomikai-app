@@ -1,0 +1,60 @@
+# main への push で Firebase にデプロイする。
+#
+# 元は Firebase CLI が自動生成した Hosting だけをデプロイする内容だったが、
+# それだと `functions/` の変更（駅検索などバックエンド側の修正）が本番に反映されない。
+# Hosting のあとに Functions のデプロイを足している。
+name: Deploy to Firebase Hosting on merge
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: フロントエンドをビルド
+        run: npm ci && npm run build
+
+      - name: Functions の依存関係を入れてビルド
+        run: |
+          npm ci --prefix functions
+          npm run build --prefix functions
+
+      - name: Functions のテスト
+        run: npm test --prefix functions
+
+      - name: Hosting をデプロイ
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NOMIKAI_APP_B6FC0 }}
+          channelId: live
+          projectId: nomikai-app-b6fc0
+
+      # ここから Functions。Hosting のあとに実行するので、
+      # 権限不足などで失敗しても Hosting のデプロイは済んでいる状態になる。
+      - name: サービスアカウントを書き出す
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NOMIKAI_APP_B6FC0 }}
+        run: printf '%s' "$SA_JSON" > "$RUNNER_TEMP/service-account.json"
+
+      - name: Functions をデプロイ
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
+        run: >
+          npx --yes firebase-tools@13 deploy
+          --only functions
+          --project nomikai-app-b6fc0
+          --non-interactive
+          --force
+
+      - name: サービスアカウントを消す
+        if: always()
+        run: rm -f "$RUNNER_TEMP/service-account.json"

@@ -122,7 +122,27 @@ npm run dev
 
 `npm run dev` の Vite dev server が `/api` を Functions エミュレータへプロキシします。
 
-### 本番デプロイ
+### 自動デプロイ（GitHub Actions）
+
+`main` への push で `.github/workflows/firebase-hosting-merge.yml` が動き、
+**Hosting と Functions の両方**をデプロイします。
+
+> **Functions のデプロイには追加の権限が必要です。**
+> `firebase init hosting:github` が作るサービスアカウントには Hosting 用の権限しか
+> 付いていないため、そのままだと Functions のデプロイ手順が権限エラーで失敗します。
+> Google Cloud の IAM で、`github-action-...@nomikai-app-b6fc0.iam.gserviceaccount.com` に
+> 次のロールを追加してください。
+>
+> - Cloud Functions 管理者（`roles/cloudfunctions.admin`）
+> - サービス アカウント ユーザー（`roles/iam.serviceAccountUser`）
+> - Artifact Registry 書き込み（`roles/artifactregistry.writer`）
+> - Cloud Build 編集者（`roles/cloudbuild.builds.editor`）
+> - Secret Manager のシークレット アクセサー（`roles/secretmanager.secretAccessor`）
+>
+> また `GOOGLE_MAPS_API_KEY` が Secret Manager に登録されている必要があります
+> （`npx firebase functions:secrets:set GOOGLE_MAPS_API_KEY`）。
+
+### 手動デプロイ
 
 ```bash
 # APIキーを Secret Manager に登録（.env は本番では使わない）
