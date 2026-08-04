@@ -10,8 +10,12 @@ interface Props {
 
 /** 検索バーに出す候補の件数 */
 const SUGGESTION_LIMIT = 5;
-/** 打鍵ごとに投げないためのデバウンス（Autocompleteは従量課金） */
-const DEBOUNCE_MS = 250;
+/**
+ * 打鍵ごとに投げないためのデバウンス。
+ * 駅の検索は Text Search を主経路にしており単価が高いので、やや長めにとる。
+ * （サーバ側にも10分の短時間キャッシュがある）
+ */
+const DEBOUNCE_MS = 350;
 
 /**
  * 駅名オートコンプリート。

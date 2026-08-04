@@ -252,3 +252,20 @@ test('rankByNameMatch: 空入力では候補を落とさない', () => {
   const suggestions = [{ placeId: '1', name: '渋谷駅', address: '' }];
   assert.equal(rankByNameMatch(suggestions, '', 5).length, 1);
 });
+
+/* --------------------------------------------------- 駅そのものかの判定 */
+
+const { looksLikeStation } = require('../lib/google');
+
+test('looksLikeStation: 「〇〇駅」は駅', () => {
+  assert.equal(looksLikeStation('東京駅'), true);
+  assert.equal(looksLikeStation('原爆ドーム前停留場'), true);
+  assert.equal(looksLikeStation('Shibuya Station'), true);
+});
+
+test('looksLikeStation: 駅を含むだけの施設は駅ではない', () => {
+  // Text Search は「東京 駅」で商業施設も返してくるので末尾で判定する
+  assert.equal(looksLikeStation('東京駅一番街'), false);
+  assert.equal(looksLikeStation('渋谷スクランブルスクエア'), false);
+  assert.equal(looksLikeStation('駅前不動産'), false);
+});
