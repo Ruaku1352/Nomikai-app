@@ -3,11 +3,7 @@
  * APIキーはここ（サーバ側）だけで扱い、クライアントには絶対に出さない。
  */
 
-import {
-  normalizeForMatch,
-  rankByNameMatch,
-  scoreStationNameMatch,
-} from './util';
+import { normalizeForMatch, rankByNameMatch } from './util';
 
 const PLACES_BASE = 'https://places.googleapis.com/v1';
 
@@ -339,13 +335,13 @@ export async function autocompleteStations(
   }
 
   let ranked = rankByNameMatch([...collected.values()], query, limit);
-  // 件数が揃っている、または入力と完全一致する駅が取れていれば追加のコールはしない
-  const hasExact = ranked.some((s) => scoreStationNameMatch(s.name, query) === 3);
-  if (ranked.length >= limit || (hasExact && ranked.length > 0)) {
-    return finish(ranked, 'text-search');
-  }
+  if (ranked.length >= limit) return finish(ranked, 'text-search');
 
-  // 2) 件数が足りなければ Autocomplete で補う（単価が安いので気軽に足せる）
+  // 2) 件数が足りなければ Autocomplete で補う。
+  //    Text Search に「渋谷 駅」と投げると Google が絞り込みすぎて、
+  //    渋谷駅そのものしか返らず候補が1件になってしまう。
+  //    Autocomplete は Text Search の1/10程度の単価なので、近隣の駅を足す用途で使う。
+  //    （それでも5件に届かないことはある。無関係な駅を出すよりは少ない方がよい）
   try {
     const typed = await fetchAutocomplete(query, true);
     record('autocomplete(駅タイプ指定)', query, typed);
