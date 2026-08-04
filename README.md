@@ -170,7 +170,9 @@ curl http://127.0.0.1:5001/<projectId>/asia-northeast1/api/diag
 | `{"ok": true, "resultCount": 5}` | バックエンドは正常 | ブラウザのDevToolsで `/api/stations/autocomplete` のレスポンスを確認 |
 | `{"ok": false, "resultCount": 0}` | Googleが候補を返していない | `trace.stages` を見てどの段階で0件になったか確認 |
 
-候補が0件になる場合は `?debug=1` を付けると、どの検索経路が何件返したかが分かります。
+候補が0件になる、または無関係な駅が出る場合は `?debug=1` を付けてください。
+**Googleへ実際に送った文字列**・生の応答件数・フィルタ通過件数・失敗理由が返ります。
+`apiVersion` でデプロイ済みのビルドも確認できます（古いままなら再デプロイが必要）。
 
 ```bash
 curl 'https://<your-app>.web.app/api/stations/autocomplete?q=渋谷&debug=1'
@@ -178,16 +180,28 @@ curl 'https://<your-app>.web.app/api/stations/autocomplete?q=渋谷&debug=1'
 
 ```json
 {
+  "apiVersion": "2026-08-04-stations-v3",
+  "receivedQuery": "渋谷",
   "suggestions": [...],
   "trace": {
     "source": "text-search",
     "stages": [
-      { "name": "autocomplete(駅タイプ指定)", "query": "渋谷", "raw": 0, "names": [] },
-      { "name": "text-search", "query": "渋谷", "raw": 2, "names": ["渋谷駅", "渋谷ヒカリエ駅"] }
+      {
+        "name": "text-search(Googleの生の応答)",
+        "query": "渋谷 駅",
+        "raw": 12,
+        "kept": 4,
+        "names": ["渋谷駅", "渋谷スクランブルスクエア", "..."]
+      }
     ]
   }
 }
 ```
+
+- `receivedQuery` が入力と違う → 文字コードや経路の問題
+- `raw` が0 → Googleが候補を返していない（キーの制限やAPIの有効化を確認）
+- `raw` は多いが `kept` が0 → 当方のフィルタが落としている
+- `stages[].error` がある → その経路が失敗している（理由も入る）
 
 エラーの詳細（Googleが返した `INVALID_ARGUMENT` 等）は画面のエラー表示にも小さく出ます。
 

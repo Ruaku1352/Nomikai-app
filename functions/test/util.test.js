@@ -269,3 +269,45 @@ test('looksLikeStation: 駅を含むだけの施設は駅ではない', () => {
   assert.equal(looksLikeStation('渋谷スクランブルスクエア'), false);
   assert.equal(looksLikeStation('駅前不動産'), false);
 });
+
+/* ------------------------- 無関係な駅を出さない（報告された不具合） */
+
+const { containsKanji } = require('../lib/util');
+
+test('containsKanji: 漢字入力とかな・ローマ字入力を区別する', () => {
+  assert.equal(containsKanji('渋谷'), true);
+  assert.equal(containsKanji('渋谷駅'), true);
+  assert.equal(containsKanji('しぶや'), false);
+  assert.equal(containsKanji('シブヤ'), false);
+  assert.equal(containsKanji('shibuya'), false);
+});
+
+test('rankByNameMatch: 漢字入力で一致が無ければ無関係な駅を出さない', () => {
+  // 「渋谷駅」の候補に代官山駅・代々木公園駅・雨晴駅（富山県）が出ていた不具合。
+  // 以前はここでGoogleの順序をそのまま返していた。
+  const suggestions = [
+    { placeId: '1', name: '代官山駅', address: '東京都渋谷区' },
+    { placeId: '2', name: '代々木公園駅', address: '東京都渋谷区' },
+    { placeId: '3', name: '雨晴駅', address: '富山県高岡市' },
+  ];
+  assert.deepEqual(rankByNameMatch(suggestions, '渋谷駅', 5), []);
+  assert.deepEqual(rankByNameMatch(suggestions, '渋谷', 5), []);
+});
+
+test('rankByNameMatch: かな入力なら一致が無くても候補を残す', () => {
+  // 漢字の駅名とは文字列照合できないため、ここで捨てると候補が全滅する
+  const suggestions = [{ placeId: '1', name: '渋谷駅', address: '' }];
+  assert.equal(rankByNameMatch(suggestions, 'しぶや', 5).length, 1);
+  assert.equal(rankByNameMatch(suggestions, 'shibuya', 5).length, 1);
+});
+
+test('rankByNameMatch: 漢字入力でも一致があればそれだけ返す', () => {
+  const suggestions = [
+    { placeId: '1', name: '代官山駅', address: '東京都渋谷区' },
+    { placeId: '2', name: '渋谷駅', address: '東京都渋谷区' },
+  ];
+  assert.deepEqual(
+    rankByNameMatch(suggestions, '渋谷駅', 5).map((s) => s.name),
+    ['渋谷駅'],
+  );
+});

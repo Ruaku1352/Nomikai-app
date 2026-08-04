@@ -52,6 +52,12 @@ const wrap =
 /** オートコンプリートで返す候補の件数 */
 const AUTOCOMPLETE_LIMIT = 5;
 
+/**
+ * デプロイされているビルドの識別子。
+ * 「直したはずなのに直っていない」ときに、実際に動いている版を確認するために返す。
+ */
+const API_VERSION = '2026-08-04-stations-v3';
+
 router.get(
   '/stations/autocomplete',
   wrap(async (req, res) => {
@@ -70,7 +76,7 @@ router.get(
     if (req.query.debug) {
       const trace: AutocompleteTrace = { stages: [], source: 'none' };
       const suggestions = await autocompleteStations(q, limit, trace);
-      res.json({ suggestions, trace });
+      res.json({ apiVersion: API_VERSION, receivedQuery: q, suggestions, trace });
       return;
     }
 
@@ -88,6 +94,7 @@ router.get(
     const keyConfigured = Boolean(process.env.GOOGLE_MAPS_API_KEY);
     if (!keyConfigured) {
       res.json({
+        apiVersion: API_VERSION,
         keyConfigured: false,
         ok: false,
         hint: 'functions/.env に GOOGLE_MAPS_API_KEY を設定するか、Secret Manager に登録してください。',
@@ -98,6 +105,7 @@ router.get(
       const trace: AutocompleteTrace = { stages: [], source: 'none' };
       const suggestions = await autocompleteStations('渋谷', 5, trace);
       res.json({
+        apiVersion: API_VERSION,
         keyConfigured: true,
         ok: suggestions.length > 0,
         sampleQuery: '渋谷',
@@ -108,6 +116,7 @@ router.get(
     } catch (e) {
       const err = e as HttpError;
       res.json({
+        apiVersion: API_VERSION,
         keyConfigured: true,
         ok: false,
         error: err.message,

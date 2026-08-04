@@ -56,12 +56,24 @@ export function scoreStationNameMatch(name: string, query: string): number {
   return 0;
 }
 
+/** 漢字を含む入力か（かな・ローマ字入力と区別する） */
+export function containsKanji(value: string): boolean {
+  return /[\u3005\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/.test(value);
+}
+
 /**
  * 駅名の一致度で並べ替える。
  *
  * 1件でも駅名が一致していれば、住所だけ一致した候補は捨てる。
- * 逆に1件も一致しない場合（かな・ローマ字入力でGoogleが読みで拾った場合など）は、
- * 取りこぼしを避けるためGoogleの順序をそのまま尊重する。
+ *
+ * 1件も一致しなかった場合の扱いは入力の種類で変える。
+ * - **漢字を含む入力**（渋谷 / 渋谷駅）: 駅名と直接照合できるはずなので、
+ *   一致が無い＝無関係な候補しか無いということ。**空を返す。**
+ *   以前はGoogleの順序をそのまま返していたため、「渋谷駅」の候補に
+ *   代官山駅・代々木公園駅・雨晴駅（富山県）のような無関係な駅が出ていた。
+ * - **かな・ローマ字入力**（しぶや / shibuya）: 漢字の駅名とは文字列照合できず、
+ *   Googleが読みで拾ってくれている。ここで捨てると候補が全滅するのでGoogleの順序を使う。
+ *
  * 同名の駅（JRと地下鉄で別placeId）は1つにまとめる。
  */
 export function rankByNameMatch<T extends { placeId: string; name: string }>(
@@ -76,7 +88,8 @@ export function rankByNameMatch<T extends { placeId: string; name: string }>(
   }));
 
   const matched = scored.filter((x) => x.score > 0);
-  const pool = matched.length > 0 ? matched : scored;
+  const pool =
+    matched.length > 0 ? matched : containsKanji(query) ? [] : scored;
 
   // スコア降順、同スコアならGoogleが返した順（＝関連度順）を保つ
   pool.sort((a, b) => b.score - a.score || a.index - b.index);

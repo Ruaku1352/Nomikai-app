@@ -214,8 +214,19 @@ async function fetchAutocomplete(
  * ときに限り「〇〇駅」で引き直して補充する（コールは最大2回）。
  */
 export interface AutocompleteTrace {
-  /** どの段階で何件取れたか（切り分け用） */
-  stages: { name: string; query: string; raw: number; names: string[] }[];
+  /** どの段階で何が起きたか（切り分け用） */
+  stages: {
+    name: string;
+    /** 実際にGoogleへ送った文字列。文字化けの有無もこれで分かる */
+    query: string;
+    /** Googleが返した件数 */
+    raw: number;
+    /** 駅名フィルタ通過後の件数 */
+    kept?: number;
+    names: string[];
+    /** 失敗した場合の理由（成功時は入らない） */
+    error?: string;
+  }[];
   source: 'cache' | 'text-search' | 'autocomplete' | 'autocomplete-loose' | 'none';
 }
 
@@ -290,6 +301,18 @@ export async function autocompleteStations(
       names: list.map((s) => s.name),
     });
   };
+  const recordError = (name: string, q: string, e: unknown) => {
+    trace?.stages.push({
+      name,
+      query: q,
+      raw: 0,
+      names: [],
+      error:
+        e instanceof HttpError
+          ? `${e.message}${e.details ? ` (${e.details})` : ''}`
+          : String(e),
+    });
+  };
   const add = (list: Suggestion[]) => {
     for (const s of list) if (!collected.has(s.placeId)) collected.set(s.placeId, s);
   };
@@ -305,12 +328,13 @@ export async function autocompleteStations(
   // 1) Text Search（主経路）
   let textCount = 0;
   try {
-    const byText = await searchStationsByText(query, limit);
-    record('text-search', query, byText);
+    const byText = await searchStationsByText(query, limit, trace);
+    record('text-search', textSearchQuery(query), byText);
     textCount = byText.length;
     add(byText);
   } catch (e) {
     lastError = e;
+    recordError('text-search', query, e);
     console.warn('text-search に失敗しました', e);
   }
 
@@ -328,6 +352,7 @@ export async function autocompleteStations(
     add(typed);
   } catch (e) {
     lastError = e;
+    recordError('autocomplete(駅タイプ指定)', query, e);
     console.warn('autocomplete(タイプ指定)に失敗しました', e);
   }
 
@@ -339,15 +364,22 @@ export async function autocompleteStations(
   // 3) 最後の救済：タイプで絞らずに引き、駅らしい候補だけ残す
   try {
     const loose = await fetchAutocomplete(query, false);
-    record('autocomplete(タイプ指定なし)', query, loose);
     const looseStations = rankByNameMatch(
       loose.filter((s) => looksLikeStation(s.name)),
       query,
       limit,
     );
+    trace?.stages.push({
+      name: 'autocomplete(タイプ指定なし)',
+      query,
+      raw: loose.length,
+      kept: looseStations.length,
+      names: loose.map((s) => s.name),
+    });
     if (looseStations.length > 0) return finish(looseStations, 'autocomplete-loose');
   } catch (e) {
     lastError = e;
+    recordError('autocomplete(タイプ指定なし)', query, e);
   }
 
   // 全経路が失敗した場合は「0件」ではなくエラーとして返す（設定不備を隠さない）
@@ -512,13 +544,21 @@ interface StationTextSearchResponse {
  * Text Search は実在の場所を返すため取りこぼしにくい。緯度経度も一緒に返るので
  * 選択時の Place Details を省ける。単価は高いので0件時のみ使う。
  */
+/**
+ * Text Search に投げる語。
+ * 「渋谷駅」のように既に駅名ならそのまま、そうでなければ空白区切りで「駅」を足す。
+ * `${query}駅` と連結すると1〜2文字の入力で「渋駅」のような語になってしまう。
+ */
+export function textSearchQuery(query: string): string {
+  return /(駅|停留場|停留所)$/.test(query) ? query : `${query} 駅`;
+}
+
 export async function searchStationsByText(
   query: string,
   limit = 5,
+  trace?: AutocompleteTrace,
 ): Promise<Suggestion[]> {
-  // 「渋谷駅」のように既に駅名ならそのまま、そうでなければ空白区切りで「駅」を足す。
-  // `${query}駅` と連結すると1〜2文字の入力で「渋駅」のような語になってしまう。
-  const textQuery = /(駅|停留場|停留所)$/.test(query) ? query : `${query} 駅`;
+  const textQuery = textSearchQuery(query);
   const data = await callGoogle<StationTextSearchResponse>(
     `${PLACES_BASE}/places:searchText`,
     {
@@ -534,7 +574,8 @@ export async function searchStationsByText(
         textQuery,
         languageCode: 'ja',
         regionCode: 'JP',
-        maxResultCount: 20,
+        // maxResultCount は非推奨。pageSize が後継（1〜20）
+        pageSize: 20,
       }),
     },
   );
@@ -556,7 +597,15 @@ export async function searchStationsByText(
     )
     .map(({ primaryType: _primaryType, ...rest }) => rest);
 
-  return rankByNameMatch(found, query, limit);
+  const ranked = rankByNameMatch(found, query, limit);
+  trace?.stages.push({
+    name: 'text-search(Googleの生の応答)',
+    query: textQuery,
+    raw: (data.places ?? []).length,
+    kept: found.length,
+    names: (data.places ?? []).map((p) => p.displayName?.text ?? ''),
+  });
+  return ranked;
 }
 
 /** 写真の実URLを解決する（キーを露出させないためサーバ経由でリダイレクトする） */
