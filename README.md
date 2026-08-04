@@ -27,7 +27,7 @@ Cloud Functions 側だけが Google Maps Platform のキーを保持します。
 
 | メソッド | パス | 用途 |
 |---|---|---|
-| GET | `/api/stations/autocomplete?q=` | 駅名オートコンプリート（Places Autocomplete、駅タイプに限定） |
+| GET | `/api/stations/autocomplete?q=` | 駅名オートコンプリート（駅タイプに限定し、駅名一致順に5件） |
 | GET | `/api/stations/:placeId` | 駅の緯度経度（Place Details） |
 | POST | `/api/candidates` | 候補駅のリストアップ＋各メンバーからの直線距離（Nearby Search） |
 | POST | `/api/venues` | 駅周辺の店をジャンル別に検索し加重スコア順に3件返す（Text Search） |
@@ -63,6 +63,11 @@ UI 上で「合計最小 / 最長最小」を切り替えられます。同点�
 
 スコア集計は `summarizeCosts()` として単位に依存しない形で切り出してあるため、
 将来 有料の乗換API を導入した場合は、距離(m)の代わりに所要時間(分)を渡すだけで同じ構造が使えます。
+
+**駅名オートコンプリート**: Places Autocomplete は住所も部分一致の対象にするため、
+「渋谷」で代官山駅・代々木公園駅（どちらも渋谷区）が返ります。
+`rankByNameMatch()` で駅名側の一致度（完全一致 > 前方一致 > 部分一致）を採点し、
+住所だけが一致した候補は捨てています。カタカナ・全角半角・末尾の「駅」は正規化して吸収します。
 
 **店舗（4.4）**: `weighted_score = rating * log(user_ratings_total + 1)` で並べ替え、
 レビュー数の少ない高評価店が上位を占めないようにしています。
@@ -125,6 +130,7 @@ Hosting の `rewrites` で `/api/**` が `asia-northeast1` の `api` 関数に�
 - Places API は**従量課金**です。Google Cloud で**予算アラート**を設定しておくことを強く推奨します。
 - 1回の検索でのコール数の目安: Autocomplete（入力ごと・250msデバウンス）+ Place Details（人数分）
   + Nearby Search 1回 + Text Search（駅3 × ジャンル数）+ 写真（表示分）。
+  Autocomplete は駅名一致が5件に満たないとき「〇〇駅」で補充するため1入力あたり最大2コールです。
   距離計算はサーバ内で完結するため、メンバーが増えてもAPIコールは増えません。
 - 候補駅の上限は `functions/src/index.ts` の `MAX_CANDIDATES`、店の検索半径は `VENUE_RADIUS_METERS` で調整できます。
 - 関数側は `maxInstances: 10` で暴走を抑えています。
@@ -160,7 +166,8 @@ curl http://127.0.0.1:5001/<projectId>/asia-northeast1/api/diag
 npm --prefix functions test
 ```
 
-距離計算・スコア集計・加重スコア・営業時間判定のユニットテスト（`functions/test/util.test.js`）が走ります。
+距離計算・スコア集計・加重スコア・営業時間判定・駅名マッチングのユニットテスト
+（`functions/test/util.test.js`、33件）が走ります。
 外部依存が無いため、APIキーなしで実行できます。
 
 ---

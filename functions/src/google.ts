@@ -3,6 +3,8 @@
  * APIキーはここ（サーバ側）だけで扱い、クライアントには絶対に出さない。
  */
 
+import { rankByNameMatch } from './util';
+
 const PLACES_BASE = 'https://places.googleapis.com/v1';
 
 export interface LatLng {
@@ -170,37 +172,50 @@ function toSuggestions(data: AutocompleteResponse): Suggestion[] {
     }));
 }
 
+/** Autocomplete を1回叩く（typed=false でタイプ絞り込みなし） */
+async function fetchAutocomplete(
+  input: string,
+  typed: boolean,
+): Promise<Suggestion[]> {
+  const data = await callGoogle<AutocompleteResponse>(
+    `${PLACES_BASE}/places:autocomplete`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        input,
+        languageCode: 'ja',
+        // 日本国内に限定する
+        includedRegionCodes: ['jp'],
+        ...(typed ? { includedPrimaryTypes: STATION_PRIMARY_TYPES } : {}),
+      }),
+    },
+  );
+  return toSuggestions(data);
+}
+
 /**
  * 駅名オートコンプリート。
  *
- * Places Autocomplete は入力の部分一致で候補を返す。まず駅タイプに絞って引き、
- * 0件だったときだけタイプ指定なしで引き直して駅らしいものを拾う。
- * （primary type が想定外の駅でも取りこぼさないための保険。全国どこの駅でも引けるようにする）
+ * Places Autocomplete は住所も含めて部分一致するため、素で使うと
+ * 「渋谷」に対して代官山駅・代々木公園駅（どちらも渋谷区）が返ってくる。
+ * そこで駅名への一致度（rankByNameMatch）で並べ替え、住所だけが一致した候補は捨てる。
+ *
+ * Autocomplete は1回につき最大5件しか返さないため、駅名一致だけで件数が足りない
+ * ときに限り「〇〇駅」で引き直して補充する（コールは最大2回）。
  */
 export async function autocompleteStations(
   input: string,
   limit = 5,
 ): Promise<Suggestion[]> {
-  const base = {
-    input,
-    languageCode: 'ja',
-    // 日本国内に限定する
-    includedRegionCodes: ['jp'],
+  const query = input.trim();
+  const collected = new Map<string, Suggestion>();
+
+  const add = (list: Suggestion[]) => {
+    for (const s of list) if (!collected.has(s.placeId)) collected.set(s.placeId, s);
   };
 
-  let typedResults: Suggestion[] = [];
   try {
-    const typed = await callGoogle<AutocompleteResponse>(
-      `${PLACES_BASE}/places:autocomplete`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          ...base,
-          includedPrimaryTypes: STATION_PRIMARY_TYPES,
-        }),
-      },
-    );
-    typedResults = toSuggestions(typed);
+    add(await fetchAutocomplete(query, true));
   } catch (e) {
     // タイプ指定がGoogle側の仕様変更で弾かれても検索機能ごと落とさない。
     // 有効化漏れ・キー制限などの本質的なエラーはそのまま投げる。
@@ -208,19 +223,30 @@ export async function autocompleteStations(
       throw e;
     }
     console.warn('includedPrimaryTypes が拒否されたためタイプ指定なしで再試行します');
+    add(await fetchAutocomplete(query, false));
   }
 
-  if (typedResults.length > 0) return typedResults.slice(0, limit);
+  let ranked = rankByNameMatch([...collected.values()], query, limit);
+
+  // 駅名一致が足りないときだけ「〇〇駅」で補充する
+  if (ranked.length < limit && !/(駅|停留場|停留所)$/.test(query)) {
+    try {
+      add(await fetchAutocomplete(`${query}駅`, true));
+      ranked = rankByNameMatch([...collected.values()], query, limit);
+    } catch (e) {
+      console.warn('駅名での補充検索に失敗しました', e);
+    }
+  }
+
+  if (ranked.length > 0) return ranked;
 
   // フォールバック：タイプで絞らずに引き、駅らしい候補だけ残す
-  const loose = await callGoogle<AutocompleteResponse>(
-    `${PLACES_BASE}/places:autocomplete`,
-    { method: 'POST', body: JSON.stringify(base) },
+  const loose = await fetchAutocomplete(query, false);
+  return rankByNameMatch(
+    loose.filter((s) => looksLikeStation(s.name, s.address)),
+    query,
+    limit,
   );
-
-  return toSuggestions(loose)
-    .filter((s) => looksLikeStation(s.name, s.address))
-    .slice(0, limit);
 }
 
 interface PlaceDetails {

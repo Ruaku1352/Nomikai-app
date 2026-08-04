@@ -146,3 +146,109 @@ test('isOpenAt: 日曜から月曜へまたぐ営業（週の折り返し）', (
   // 2026-08-03 00:30 JST は月曜0:30 → 日曜20:00開始の区間内
   assert.equal(isOpenAt(sundayLate, new Date('2026-08-02T15:30:00Z')), true);
 });
+
+/* ------------------------------------------------------- 駅名マッチング */
+
+const {
+  normalizeForMatch,
+  stripStationSuffix,
+  scoreStationNameMatch,
+  rankByNameMatch,
+} = require('../lib/util');
+
+test('normalizeForMatch: カタカナはひらがなに寄せる', () => {
+  assert.equal(normalizeForMatch('シブヤ'), 'しぶや');
+  assert.equal(normalizeForMatch('ｼﾌﾞﾔ'), 'しぶや');
+});
+
+test('normalizeForMatch: 空白・中黒・大文字小文字を吸収する', () => {
+  assert.equal(normalizeForMatch('Shibuya Station'), 'shibuyastation');
+  assert.equal(normalizeForMatch('サン・シャイン'), 'さんしゃいん');
+});
+
+test('stripStationSuffix: 末尾の駅を落とす', () => {
+  assert.equal(stripStationSuffix('渋谷駅'), '渋谷');
+  assert.equal(stripStationSuffix('原爆ドーム前停留場'), '原爆ドーム前');
+  // 途中の「駅」は落とさない
+  assert.equal(stripStationSuffix('駅前本町'), '駅前本町');
+});
+
+test('scoreStationNameMatch: 完全一致が最上位', () => {
+  assert.equal(scoreStationNameMatch('渋谷駅', '渋谷'), 3);
+  assert.equal(scoreStationNameMatch('渋谷駅', '渋谷駅'), 3);
+});
+
+test('scoreStationNameMatch: 前方一致 > 部分一致', () => {
+  assert.ok(
+    scoreStationNameMatch('渋谷ヒカリエ駅', '渋谷') >
+      scoreStationNameMatch('新渋谷駅', 'ヶ谷'),
+  );
+  assert.equal(scoreStationNameMatch('西新宿五丁目駅', '西新宿'), 2);
+  assert.equal(scoreStationNameMatch('東新宿駅', '新宿'), 1);
+});
+
+test('scoreStationNameMatch: 駅名に含まれなければ0（住所だけの一致）', () => {
+  // 代官山駅・代々木公園駅はどちらも渋谷区だが駅名に「渋谷」を含まない
+  assert.equal(scoreStationNameMatch('代官山駅', '渋谷'), 0);
+  assert.equal(scoreStationNameMatch('代々木公園駅', '渋谷'), 0);
+});
+
+test('rankByNameMatch: 住所だけ一致した駅を捨てる（報告された不具合）', () => {
+  const suggestions = [
+    { placeId: '1', name: '代官山駅', address: '日本、東京都渋谷区' },
+    { placeId: '2', name: '代々木公園駅', address: '日本、東京都渋谷区' },
+    { placeId: '3', name: '渋谷駅', address: '日本、東京都渋谷区' },
+    { placeId: '4', name: '神泉駅', address: '日本、東京都渋谷区' },
+  ];
+  const ranked = rankByNameMatch(suggestions, '渋谷', 5);
+  assert.deepEqual(
+    ranked.map((s) => s.name),
+    ['渋谷駅'],
+  );
+});
+
+test('rankByNameMatch: 完全一致を先頭にし、前方一致・部分一致が続く', () => {
+  const suggestions = [
+    { placeId: '1', name: '東新宿駅', address: '' },
+    { placeId: '2', name: '新宿三丁目駅', address: '' },
+    { placeId: '3', name: '新宿駅', address: '' },
+  ];
+  assert.deepEqual(
+    rankByNameMatch(suggestions, '新宿', 5).map((s) => s.name),
+    ['新宿駅', '新宿三丁目駅', '東新宿駅'],
+  );
+});
+
+test('rankByNameMatch: 同名の駅（JRと地下鉄）は1つにまとめる', () => {
+  const suggestions = [
+    { placeId: 'jr', name: '渋谷駅', address: 'JR' },
+    { placeId: 'metro', name: '渋谷駅', address: '東京メトロ' },
+  ];
+  assert.equal(rankByNameMatch(suggestions, '渋谷', 5).length, 1);
+});
+
+test('rankByNameMatch: 1件も駅名一致がなければGoogleの順序を尊重する', () => {
+  // かな入力でGoogleが読みで拾ったケース。ここで捨てると候補が0件になる
+  const suggestions = [
+    { placeId: '1', name: '渋谷駅', address: '' },
+    { placeId: '2', name: '神泉駅', address: '' },
+  ];
+  assert.deepEqual(
+    rankByNameMatch(suggestions, 'しぶや', 5).map((s) => s.name),
+    ['渋谷駅', '神泉駅'],
+  );
+});
+
+test('rankByNameMatch: limit を超えない', () => {
+  const suggestions = Array.from({ length: 10 }, (_, i) => ({
+    placeId: `p${i}`,
+    name: `新宿${i}駅`,
+    address: '',
+  }));
+  assert.equal(rankByNameMatch(suggestions, '新宿', 5).length, 5);
+});
+
+test('rankByNameMatch: 空入力では候補を落とさない', () => {
+  const suggestions = [{ placeId: '1', name: '渋谷駅', address: '' }];
+  assert.equal(rankByNameMatch(suggestions, '', 5).length, 1);
+});
