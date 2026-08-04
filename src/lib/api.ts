@@ -17,6 +17,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** 原因の切り分け用にサーバが付ける補足（Googleのエラーコード等） */
+    readonly details?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -31,26 +33,33 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     let message = `リクエストに失敗しました (${res.status})`;
+    let details: string | undefined;
     try {
-      const parsed = JSON.parse(body) as { error?: string };
+      const parsed = JSON.parse(body) as { error?: string; details?: string };
       if (parsed.error) message = parsed.error;
+      details = parsed.details;
     } catch {
-      /* プレーンテキストならそのまま無視 */
+      // JSONで返ってこない＝バックエンドに届いていない可能性が高い（proxy設定漏れ等）
+      if (res.status === 404) {
+        message =
+          'APIに接続できません (404)。Functions エミュレータの起動と .env の VITE_FUNCTIONS_EMULATOR_PREFIX を確認してください。';
+      }
     }
-    throw new ApiError(message, res.status);
+    throw new ApiError(message, res.status, details);
   }
   return (await res.json()) as T;
 }
 
-/** 駅名オートコンプリート（Places API - Autocomplete） */
+/** 駅名オートコンプリート（Places API - Autocomplete）。既定で部分一致の上位5件。 */
 export function autocompleteStations(
   query: string,
+  limit = 5,
   signal?: AbortSignal,
 ): Promise<{ suggestions: AutocompleteSuggestion[] }> {
-  return request(`/stations/autocomplete?q=${encodeURIComponent(query)}`, {
-    method: 'GET',
-    signal,
-  });
+  return request(
+    `/stations/autocomplete?q=${encodeURIComponent(query)}&limit=${limit}`,
+    { method: 'GET', signal },
+  );
 }
 
 /** placeId から緯度経度を引く（Places API - Place Details） */

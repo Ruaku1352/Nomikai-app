@@ -25,9 +25,75 @@ export class HttpError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** 原因の切り分け用。APIキーは絶対に含めない。 */
+    readonly details?: string,
   ) {
     super(message);
   }
+}
+
+interface GoogleErrorBody {
+  error?: { code?: number; status?: string; message?: string };
+}
+
+/**
+ * Google のエラーを、原因が分かる日本語メッセージに変換する。
+ *
+ * 以前は「地図サービスへの問い合わせに失敗しました」の一言に潰していたため、
+ * APIの有効化漏れなのかキー制限なのかリクエスト不正なのか区別がつかなかった。
+ * Googleのエラー本文にAPIキーは含まれないので、原因部分は details として返す。
+ */
+function translateGoogleError(status: number, body: string): HttpError {
+  let code = '';
+  let message = '';
+  try {
+    const parsed = JSON.parse(body) as GoogleErrorBody;
+    code = parsed.error?.status ?? '';
+    message = parsed.error?.message ?? '';
+  } catch {
+    message = body.slice(0, 300);
+  }
+  const details = [code, message].filter(Boolean).join(': ').slice(0, 500);
+
+  if (status === 429 || code === 'RESOURCE_EXHAUSTED') {
+    return new HttpError(
+      429,
+      'リクエストが多すぎます。少し待って再試行してください。',
+      details,
+    );
+  }
+  if (status === 403 || status === 401 || code === 'PERMISSION_DENIED') {
+    if (/has not been used in project|is disabled|SERVICE_DISABLED/i.test(message)) {
+      return new HttpError(
+        502,
+        'Google Cloud で Places API (New) が有効になっていません。プロジェクトで有効化してください。',
+        details,
+      );
+    }
+    if (/API key|referer|referrer|IP|restrict/i.test(message)) {
+      return new HttpError(
+        502,
+        'APIキーの制限で拒否されました。キーのAPI制限に Places API (New) が含まれているか確認してください（サーバから呼ぶためリファラ制限は使えません）。',
+        details,
+      );
+    }
+    if (/billing/i.test(message)) {
+      return new HttpError(
+        502,
+        'Google Cloud の課金設定が有効になっていません（Firebase は Blaze プランが必要です）。',
+        details,
+      );
+    }
+    return new HttpError(502, 'Google API へのアクセスが拒否されました。', details);
+  }
+  if (status === 400 || code === 'INVALID_ARGUMENT') {
+    return new HttpError(
+      502,
+      'Google API へのリクエストが不正です。',
+      details,
+    );
+  }
+  return new HttpError(502, '地図サービスへの問い合わせに失敗しました。', details);
 }
 
 async function callGoogle<T>(
@@ -47,13 +113,7 @@ async function callGoogle<T>(
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     console.error('Google API error', url, res.status, text);
-    // 上流のエラー本文はキー情報を含みうるのでクライアントには返さない
-    throw new HttpError(
-      res.status === 429 ? 429 : 502,
-      res.status === 429
-        ? 'リクエストが多すぎます。少し待って再試行してください。'
-        : '地図サービスへの問い合わせに失敗しました。',
-    );
+    throw translateGoogleError(res.status, text);
   }
   return (await res.json()) as T;
 }
@@ -73,21 +133,33 @@ interface AutocompleteResponse {
   }[];
 }
 
-export async function autocompleteStations(input: string) {
-  const data = await callGoogle<AutocompleteResponse>(
-    `${PLACES_BASE}/places:autocomplete`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        input,
-        // 駅だけに絞る（includedPrimaryTypes は最大5件）
-        includedPrimaryTypes: ['train_station', 'subway_station'],
-        languageCode: 'ja',
-        regionCode: 'JP',
-      }),
-    },
-  );
+/**
+ * 駅とみなす primary type。
+ *
+ * train_station / subway_station だけでは日本の駅を取りこぼす:
+ *   - light_rail_station … 路面電車・モノレール・新交通（広島電鉄、ゆりかもめ、札幌市電など）
+ *   - transit_station     … 事業者や駅によってはこちらが primary になる
+ * includedPrimaryTypes は最大5件まで指定できる。
+ */
+const STATION_PRIMARY_TYPES = [
+  'train_station',
+  'subway_station',
+  'light_rail_station',
+  'transit_station',
+];
 
+/** 駅らしい名前か（タイプ絞り込みなしのフォールバック時に使う） */
+function looksLikeStation(name: string, address: string): boolean {
+  return /駅|停留場|停留所|のりば|Station/i.test(`${name} ${address}`);
+}
+
+interface Suggestion {
+  placeId: string;
+  name: string;
+  address: string;
+}
+
+function toSuggestions(data: AutocompleteResponse): Suggestion[] {
   return (data.suggestions ?? [])
     .map((s) => s.placePrediction)
     .filter((p): p is NonNullable<typeof p> => Boolean(p?.placeId))
@@ -96,6 +168,59 @@ export async function autocompleteStations(input: string) {
       name: p.structuredFormat?.mainText?.text ?? p.text?.text ?? '',
       address: p.structuredFormat?.secondaryText?.text ?? '',
     }));
+}
+
+/**
+ * 駅名オートコンプリート。
+ *
+ * Places Autocomplete は入力の部分一致で候補を返す。まず駅タイプに絞って引き、
+ * 0件だったときだけタイプ指定なしで引き直して駅らしいものを拾う。
+ * （primary type が想定外の駅でも取りこぼさないための保険。全国どこの駅でも引けるようにする）
+ */
+export async function autocompleteStations(
+  input: string,
+  limit = 5,
+): Promise<Suggestion[]> {
+  const base = {
+    input,
+    languageCode: 'ja',
+    // 日本国内に限定する
+    includedRegionCodes: ['jp'],
+  };
+
+  let typedResults: Suggestion[] = [];
+  try {
+    const typed = await callGoogle<AutocompleteResponse>(
+      `${PLACES_BASE}/places:autocomplete`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          ...base,
+          includedPrimaryTypes: STATION_PRIMARY_TYPES,
+        }),
+      },
+    );
+    typedResults = toSuggestions(typed);
+  } catch (e) {
+    // タイプ指定がGoogle側の仕様変更で弾かれても検索機能ごと落とさない。
+    // 有効化漏れ・キー制限などの本質的なエラーはそのまま投げる。
+    if (!(e instanceof HttpError && e.details?.startsWith('INVALID_ARGUMENT'))) {
+      throw e;
+    }
+    console.warn('includedPrimaryTypes が拒否されたためタイプ指定なしで再試行します');
+  }
+
+  if (typedResults.length > 0) return typedResults.slice(0, limit);
+
+  // フォールバック：タイプで絞らずに引き、駅らしい候補だけ残す
+  const loose = await callGoogle<AutocompleteResponse>(
+    `${PLACES_BASE}/places:autocomplete`,
+    { method: 'POST', body: JSON.stringify(base) },
+  );
+
+  return toSuggestions(loose)
+    .filter((s) => looksLikeStation(s.name, s.address))
+    .slice(0, limit);
 }
 
 interface PlaceDetails {

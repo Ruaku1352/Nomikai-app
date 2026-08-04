@@ -32,6 +32,7 @@ Cloud Functions 側だけが Google Maps Platform のキーを保持します。
 | POST | `/api/candidates` | 候補駅のリストアップ＋各メンバーからの直線距離（Nearby Search） |
 | POST | `/api/venues` | 駅周辺の店をジャンル別に検索し加重スコア順に3件返す（Text Search） |
 | GET | `/api/photo?name=` | 店舗写真のプロキシ（署名付きURLへ302リダイレクト） |
+| GET | `/api/diag` | 設定の切り分け（キーの有無とPlaces APIへの疎通を1コールで確認） |
 
 ---
 
@@ -129,6 +130,27 @@ Hosting の `rewrites` で `/api/**` が `asia-northeast1` の `api` 関数に�
 - 関数側は `maxInstances: 10` で暴走を抑えています。
 - Places API の結果はキャッシュ期間に制限があるため、サーバ側では永続キャッシュしていません。
   Service Worker も `/api/**` はキャッシュせず、直前の結果のみ localStorage に保持してオフライン閲覧に使います。
+
+---
+
+## 駅の検索がうまくいかないとき
+
+まず切り分け用エンドポイントを叩いてください。APIキーは返りません。
+
+```bash
+curl http://127.0.0.1:5001/<projectId>/asia-northeast1/api/diag
+```
+
+| 返ってくるもの | 原因 | 対処 |
+|---|---|---|
+| `{"keyConfigured": false, ...}` | キーが読めていない | `functions/.env` に `GOOGLE_MAPS_API_KEY=...` を置き、エミュレータを再起動 |
+| `Places API (New) が有効になっていません` | 有効化しているのが**レガシーの Places API** | Google Cloud で **Places API (New)** を有効化（別サービス扱い） |
+| `APIキーの制限で拒否されました` | キーのAPI制限／リファラ制限 | API制限に Places API (New) を追加。**リファラ制限は外す**（サーバから呼ぶため効かない） |
+| `課金設定が有効になっていません` | Blazeプラン未設定 | Firebase を Blaze プランに変更 |
+| `APIに接続できません (404)` | フロントがFunctionsに届いていない | `.env` の `VITE_FUNCTIONS_EMULATOR_PREFIX=/<projectId>/asia-northeast1/api` とエミュレータの起動を確認 |
+| `{"ok": true, "resultCount": 3}` | バックエンドは正常 | ブラウザのDevToolsで `/api/stations/autocomplete` のレスポンスを確認 |
+
+エラーの詳細（Googleが返した `INVALID_ARGUMENT` 等）は画面のエラー表示にも小さく出ます。
 
 ---
 

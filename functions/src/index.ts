@@ -48,14 +48,62 @@ const wrap =
     fn(req, res).catch(next);
   };
 
-router.get('/stations/autocomplete', wrap(async (req, res) => {
-  const q = String(req.query.q ?? '').trim();
-  if (q.length < 2) {
-    res.json({ suggestions: [] });
-    return;
-  }
-  res.json({ suggestions: await autocompleteStations(q) });
-}));
+/** オートコンプリートで返す候補の件数 */
+const AUTOCOMPLETE_LIMIT = 5;
+
+router.get(
+  '/stations/autocomplete',
+  wrap(async (req, res) => {
+    const q = String(req.query.q ?? '').trim();
+    // 1文字から引く（「渋」「新」でも候補を出す）
+    if (q.length < 1) {
+      res.json({ suggestions: [] });
+      return;
+    }
+    const limit = Math.min(
+      10,
+      Math.max(1, Number(req.query.limit ?? AUTOCOMPLETE_LIMIT) || AUTOCOMPLETE_LIMIT),
+    );
+    res.json({ suggestions: await autocompleteStations(q, limit) });
+  }),
+);
+
+/**
+ * 設定の切り分け用。APIキーが読めているか、Places API (New) が実際に叩けるかを返す。
+ * Autocomplete を1回だけ実行する（キー自体は絶対に返さない）。
+ */
+router.get(
+  '/diag',
+  wrap(async (_req, res) => {
+    const keyConfigured = Boolean(process.env.GOOGLE_MAPS_API_KEY);
+    if (!keyConfigured) {
+      res.json({
+        keyConfigured: false,
+        ok: false,
+        hint: 'functions/.env に GOOGLE_MAPS_API_KEY を設定するか、Secret Manager に登録してください。',
+      });
+      return;
+    }
+    try {
+      const suggestions = await autocompleteStations('新宿', 3);
+      res.json({
+        keyConfigured: true,
+        ok: true,
+        sampleQuery: '新宿',
+        resultCount: suggestions.length,
+        samples: suggestions.map((s) => s.name),
+      });
+    } catch (e) {
+      const err = e as HttpError;
+      res.json({
+        keyConfigured: true,
+        ok: false,
+        error: err.message,
+        details: err.details ?? null,
+      });
+    }
+  }),
+);
 
 router.get(
   '/stations/:placeId',
@@ -259,7 +307,10 @@ app.use(
     _next: express.NextFunction,
   ) => {
     if (err instanceof HttpError) {
-      res.status(err.status).json({ error: err.message });
+      res.status(err.status).json({
+        error: err.message,
+        ...(err.details ? { details: err.details } : {}),
+      });
       return;
     }
     console.error('Unhandled error', err);

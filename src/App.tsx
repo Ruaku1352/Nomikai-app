@@ -15,6 +15,7 @@ export default function App() {
   const loading = useAppStore((s) => s.loading);
   const loadingMessage = useAppStore((s) => s.loadingMessage);
   const error = useAppStore((s) => s.error);
+  const errorDetails = useAppStore((s) => s.errorDetails);
   const clearError = useAppStore((s) => s.clearError);
   const result = useAppStore((s) => s.result);
   const setStep = useAppStore((s) => s.setStep);
@@ -57,7 +58,14 @@ export default function App() {
           role="alert"
           className="mb-4 flex items-start gap-2 rounded-xl bg-red-500/15 px-4 py-3 text-sm text-red-300"
         >
-          <span className="flex-1">{error}</span>
+          <span className="flex-1">
+            {error}
+            {errorDetails && (
+              <span className="mt-1 block break-all text-[11px] text-red-300/60">
+                {errorDetails}
+              </span>
+            )}
+          </span>
           <button type="button" onClick={clearError} className="text-red-300/60">
             ✕
           </button>

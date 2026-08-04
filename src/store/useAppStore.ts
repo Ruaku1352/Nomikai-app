@@ -8,7 +8,7 @@ import type {
   StationRef,
   VenueGroup,
 } from '../types';
-import { fetchCandidates, fetchVenues } from '../lib/api';
+import { ApiError, fetchCandidates, fetchVenues } from '../lib/api';
 import { rankStations } from '../lib/scoring';
 
 export const DEFAULT_GENRES = [
@@ -38,6 +38,8 @@ interface AppState {
   loading: boolean;
   loadingMessage: string;
   error: string | null;
+  /** エラーの補足（Googleのエラーコード等）。原因の切り分け用 */
+  errorDetails: string | null;
   /** 最後に計算した結果。オフラインでも閲覧できるよう永続化する */
   result: ResultPayload | null;
 
@@ -81,6 +83,7 @@ export const useAppStore = create<AppState>()(
       loading: false,
       loadingMessage: '',
       error: null,
+      errorDetails: null,
       result: null,
 
       setStep: (step) => set({ step }),
@@ -132,7 +135,7 @@ export const useAppStore = create<AppState>()(
       setCustomGenre: (customGenre) => set({ customGenre }),
       setMeetTime: (meetTime) => set({ meetTime }),
       setSortMode: (sortMode) => set({ sortMode }),
-      clearError: () => set({ error: null }),
+      clearError: () => set({ error: null, errorDetails: null }),
 
       reset: () =>
         set({
@@ -143,6 +146,7 @@ export const useAppStore = create<AppState>()(
           meetTime: '',
           result: null,
           error: null,
+          errorDetails: null,
         }),
 
       effectiveGenres: () => {
@@ -155,18 +159,19 @@ export const useAppStore = create<AppState>()(
         const { members, meetTime, sortMode } = get();
         const ready = members.filter((m) => m.station?.location);
         if (ready.length < MIN_MEMBERS) {
-          set({ error: '最寄駅を2人以上入力してください。' });
+          set({ error: '最寄駅を2人以上入力してください。', errorDetails: null });
           return;
         }
         const genres = get().effectiveGenres();
         if (genres.length === 0) {
-          set({ error: 'ジャンルを1つ以上選択してください。' });
+          set({ error: 'ジャンルを1つ以上選択してください。', errorDetails: null });
           return;
         }
 
         set({
           loading: true,
           error: null,
+          errorDetails: null,
           loadingMessage: '候補駅を探しています…',
         });
 
@@ -181,6 +186,7 @@ export const useAppStore = create<AppState>()(
               loadingMessage: '',
               error:
                 '候補になる駅が見つかりませんでした。入力した駅名を見直して試してください。',
+              errorDetails: null,
             });
             return;
           }
@@ -223,6 +229,7 @@ export const useAppStore = create<AppState>()(
               e instanceof Error
                 ? e.message
                 : '不明なエラーが発生しました。時間をおいて再試行してください。',
+            errorDetails: e instanceof ApiError ? (e.details ?? null) : null,
           });
         }
       },
@@ -234,7 +241,12 @@ export const useAppStore = create<AppState>()(
         const station = result.stations.find((s) => s.placeId === placeId);
         if (!station) return;
 
-        set({ loading: true, loadingMessage: 'お店を検索中…', error: null });
+        set({
+          loading: true,
+          loadingMessage: 'お店を検索中…',
+          error: null,
+          errorDetails: null,
+        });
         try {
           const { groups } = await fetchVenues({
             station: {
@@ -264,6 +276,7 @@ export const useAppStore = create<AppState>()(
             loadingMessage: '',
             error:
               e instanceof Error ? e.message : 'お店の取得に失敗しました。',
+            errorDetails: e instanceof ApiError ? (e.details ?? null) : null,
           });
         }
       },

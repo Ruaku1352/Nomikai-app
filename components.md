@@ -37,7 +37,7 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 
 | ファイル | 役割 |
 |---|---|
-| `src/components/StationInput.tsx` | 駅名オートコンプリート。**250msデバウンス**・2文字未満は送信しない・入力中断時は `AbortController` でキャンセル。候補選択時に Place Details で緯度経度を解決する |
+| `src/components/StationInput.tsx` | 駅名オートコンプリート。**1文字目から部分一致で最大5件**表示、一致部分をハイライト、↑↓/Enter/Escでキーボード操作。**250msデバウンス**・入力中断時は `AbortController` でキャンセル。候補選択時に Place Details で緯度経度を解決する |
 | `src/components/StationCard.tsx` | 駅カード（アコーディオン）。平均/最長の距離サマリ、メンバー別の距離、地図リンク、ジャンル別の店舗リスト |
 | `src/components/VenueCard.tsx` | 店カード。写真、店名、星評価、レビュー件数、価格帯、駅からの徒歩分、営業中バッジ、営業時間。タップでGoogleマップへ遷移 |
 
@@ -65,15 +65,31 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 
 ## バックエンド（`functions/`）
 
+### 駅の検索（全国カバレッジ）
+
+Places API はGoogleのPOIデータベースなので、**47都道府県すべての駅が対象**です。
+ただし取りこぼしを防ぐため、primary type の絞り込みを次のようにしています。
+
+- `train_station` / `subway_station` / `light_rail_station` / `transit_station` の4種で検索
+  （`light_rail_station` は路面電車・モノレール・新交通、`transit_station` は事業者によって
+  primary type がこちらになる駅を拾うため）
+- それでも0件だった場合は**タイプ指定なしで再検索**し、名前に「駅 / 停留場 / 停留所 / Station」を
+  含むものだけを残す
+- Google側の仕様変更で型が拒否された（`INVALID_ARGUMENT`）場合も、同じ再検索に落ちるため
+  検索機能ごと止まることはない
+
+いずれも `includedRegionCodes: ['jp']` で日本国内に限定しています。
+
 ### エンドポイント
 
 | メソッド | パス | 使用API | 内容 |
 |---|---|---|---|
-| GET | `/api/stations/autocomplete?q=` | Places Autocomplete | `train_station` / `subway_station` に限定、`languageCode=ja` |
+| GET | `/api/stations/autocomplete?q=&limit=` | Places Autocomplete | 駅タイプ4種に限定して部分一致検索（既定5件）。0件または型が拒否された場合はタイプ指定なしで再検索 |
 | GET | `/api/stations/:placeId` | Place Details | 駅の緯度経度・住所を解決 |
 | POST | `/api/candidates` | Nearby Search | 候補駅のリストアップと、各メンバーからの直線距離の算出 |
 | POST | `/api/venues` | Text Search | ジャンル別に店舗を検索し、加重スコア順の上位3件を返す |
 | GET | `/api/photo?name=` | Place Photo | 署名付きURLへ302リダイレクト（キーを露出させない） |
+| GET | `/api/diag` | Places Autocomplete | 設定の切り分け用。キーの有無とPlaces APIへの疎通を1コールで確認 |
 
 ルータは `/api` と `/` の両方にマウントしてあり、Hosting rewrite 経由でもエミュレータ直叩きでも動作します。
 
@@ -136,7 +152,8 @@ score_max(駅) = max(各メンバーの距離)
 ## セキュリティ / コスト面の実装
 
 - **APIキーはクライアントに一切渡らない。** ローカルは `functions/.env`、本番は Secret Manager
-- 上流APIのエラー本文はそのまま返さず、汎用の日本語メッセージに置き換える
+- 上流APIのエラーは原因別の日本語メッセージに変換し、Googleのエラーコードだけを `details` として返す
+  （キーは含まれない。有効化漏れ / キー制限 / 課金 / リクエスト不正 を区別できる）
 - 写真プロキシは `places/{id}/photos/{id}` 形式のみ受け付ける（パス注入の防止）
 - 関数は `maxInstances: 10` / `timeoutSeconds: 60` で暴走を抑制
 - 距離計算はサーバ内で完結するため、この部分の課金は発生しない
