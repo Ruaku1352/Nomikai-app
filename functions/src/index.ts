@@ -9,6 +9,7 @@ import {
   photoUri,
   placeDetails,
   searchVenues,
+  type AutocompleteTrace,
   type LatLng,
 } from './google';
 import {
@@ -64,6 +65,15 @@ router.get(
       10,
       Math.max(1, Number(req.query.limit ?? AUTOCOMPLETE_LIMIT) || AUTOCOMPLETE_LIMIT),
     );
+
+    // ?debug=1 でどの段階が何件返したかを一緒に返す（切り分け用。キーは含まない）
+    if (req.query.debug) {
+      const trace: AutocompleteTrace = { stages: [], source: 'none' };
+      const suggestions = await autocompleteStations(q, limit, trace);
+      res.json({ suggestions, trace });
+      return;
+    }
+
     res.json({ suggestions: await autocompleteStations(q, limit) });
   }),
 );
@@ -85,13 +95,15 @@ router.get(
       return;
     }
     try {
-      const suggestions = await autocompleteStations('新宿', 3);
+      const trace: AutocompleteTrace = { stages: [], source: 'none' };
+      const suggestions = await autocompleteStations('渋谷', 5, trace);
       res.json({
         keyConfigured: true,
-        ok: true,
-        sampleQuery: '新宿',
+        ok: suggestions.length > 0,
+        sampleQuery: '渋谷',
         resultCount: suggestions.length,
         samples: suggestions.map((s) => s.name),
+        trace,
       });
     } catch (e) {
       const err = e as HttpError;

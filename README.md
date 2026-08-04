@@ -64,7 +64,15 @@ UI 上で「合計最小 / 最長最小」を切り替えられます。同点�
 スコア集計は `summarizeCosts()` として単位に依存しない形で切り出してあるため、
 将来 有料の乗換API を導入した場合は、距離(m)の代わりに所要時間(分)を渡すだけで同じ構造が使えます。
 
-**駅名オートコンプリート**: Places Autocomplete は住所も部分一致の対象にするため、
+**駅名オートコンプリート**: 次の順で探し、候補が取れた時点で打ち切ります。
+
+1. Autocomplete（駅タイプ4種を指定）
+2. 件数が足りなければ言い換えて補充（「渋谷」↔「渋谷駅」）
+3. それでも0件ならタイプ指定なしのAutocompleteで駅らしいものを拾う
+4. **最終手段として Text Search**（実在の場所を返すので取りこぼしにくい。
+   緯度経度も返るため選択時の Place Details を省ける。単価が高いのでここまで来たときだけ）
+
+Places Autocomplete は住所も部分一致の対象にするため、
 「渋谷」で代官山駅・代々木公園駅（どちらも渋谷区）が返ります。
 `rankByNameMatch()` で駅名側の一致度（完全一致 > 前方一致 > 部分一致）を採点し、
 住所だけが一致した候補は捨てています。カタカナ・全角半角・末尾の「駅」は正規化して吸収します。
@@ -154,7 +162,27 @@ curl http://127.0.0.1:5001/<projectId>/asia-northeast1/api/diag
 | `APIキーの制限で拒否されました` | キーのAPI制限／リファラ制限 | API制限に Places API (New) を追加。**リファラ制限は外す**（サーバから呼ぶため効かない） |
 | `課金設定が有効になっていません` | Blazeプラン未設定 | Firebase を Blaze プランに変更 |
 | `APIに接続できません (404)` | フロントがFunctionsに届いていない | `.env` の `VITE_FUNCTIONS_EMULATOR_PREFIX=/<projectId>/asia-northeast1/api` とエミュレータの起動を確認 |
-| `{"ok": true, "resultCount": 3}` | バックエンドは正常 | ブラウザのDevToolsで `/api/stations/autocomplete` のレスポンスを確認 |
+| `{"ok": true, "resultCount": 5}` | バックエンドは正常 | ブラウザのDevToolsで `/api/stations/autocomplete` のレスポンスを確認 |
+| `{"ok": false, "resultCount": 0}` | Googleが候補を返していない | `trace.stages` を見てどの段階で0件になったか確認 |
+
+候補が0件になる場合は `?debug=1` を付けると、どの検索経路が何件返したかが分かります。
+
+```bash
+curl 'https://<your-app>.web.app/api/stations/autocomplete?q=渋谷&debug=1'
+```
+
+```json
+{
+  "suggestions": [...],
+  "trace": {
+    "source": "text-search",
+    "stages": [
+      { "name": "autocomplete(駅タイプ指定)", "query": "渋谷", "raw": 0, "names": [] },
+      { "name": "text-search", "query": "渋谷", "raw": 2, "names": ["渋谷駅", "渋谷ヒカリエ駅"] }
+    ]
+  }
+}
+```
 
 エラーの詳細（Googleが返した `INVALID_ARGUMENT` 等）は画面のエラー表示にも小さく出ます。
 

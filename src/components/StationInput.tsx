@@ -96,7 +96,18 @@ export function StationInput({ value, placeholder, onChange }: Props) {
     setOpen(false);
     setSuggestions([]);
     setActiveIndex(-1);
-    // 緯度経度は Place Details で解決する（Autocomplete には含まれない）
+    // Text Search 経由の候補は緯度経度を持っているので Place Details を省ける
+    if (s.location) {
+      onChange({
+        placeId: s.placeId,
+        name: s.name,
+        address: s.address,
+        location: s.location,
+      });
+      return;
+    }
+
+    // Autocomplete の候補には緯度経度が無いので Place Details で解決する
     setPending(true);
     setError(null);
     try {

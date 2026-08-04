@@ -155,10 +155,12 @@ function looksLikeStation(name: string, address: string): boolean {
   return /駅|停留場|停留所|のりば|Station/i.test(`${name} ${address}`);
 }
 
-interface Suggestion {
+export interface Suggestion {
   placeId: string;
   name: string;
   address: string;
+  /** Text Search 経由で取れた場合のみ。Place Details を省ける */
+  location?: LatLng;
 }
 
 function toSuggestions(data: AutocompleteResponse): Suggestion[] {
@@ -203,19 +205,36 @@ async function fetchAutocomplete(
  * Autocomplete は1回につき最大5件しか返さないため、駅名一致だけで件数が足りない
  * ときに限り「〇〇駅」で引き直して補充する（コールは最大2回）。
  */
+export interface AutocompleteTrace {
+  /** どの段階で何件取れたか（切り分け用） */
+  stages: { name: string; query: string; raw: number; names: string[] }[];
+  source: 'autocomplete' | 'autocomplete-loose' | 'text-search' | 'none';
+}
+
 export async function autocompleteStations(
   input: string,
   limit = 5,
+  trace?: AutocompleteTrace,
 ): Promise<Suggestion[]> {
   const query = input.trim();
   const collected = new Map<string, Suggestion>();
 
+  const record = (name: string, q: string, list: Suggestion[]) => {
+    trace?.stages.push({
+      name,
+      query: q,
+      raw: list.length,
+      names: list.map((s) => s.name),
+    });
+  };
   const add = (list: Suggestion[]) => {
     for (const s of list) if (!collected.has(s.placeId)) collected.set(s.placeId, s);
   };
 
   try {
-    add(await fetchAutocomplete(query, true));
+    const typed = await fetchAutocomplete(query, true);
+    record('autocomplete(駅タイプ指定)', query, typed);
+    add(typed);
   } catch (e) {
     // タイプ指定がGoogle側の仕様変更で弾かれても検索機能ごと落とさない。
     // 有効化漏れ・キー制限などの本質的なエラーはそのまま投げる。
@@ -223,10 +242,13 @@ export async function autocompleteStations(
       throw e;
     }
     console.warn('includedPrimaryTypes が拒否されたためタイプ指定なしで再試行します');
-    add(await fetchAutocomplete(query, false));
+    const loose = await fetchAutocomplete(query, false);
+    record('autocomplete(タイプ指定が拒否されたため指定なし)', query, loose);
+    add(loose);
   }
 
   let ranked = rankByNameMatch([...collected.values()], query, limit);
+  if (trace && ranked.length > 0) trace.source = 'autocomplete';
 
   // 駅名一致が足りないときだけ、言い換えたクエリで補充する。
   //   「渋谷」  → 「渋谷駅」で引き直す（住所一致を弾いたぶんを埋める）
@@ -235,22 +257,38 @@ export async function autocompleteStations(
   const alternate = stem === query ? `${query}駅` : stem;
   if (ranked.length < limit && alternate && alternate !== query) {
     try {
-      add(await fetchAutocomplete(alternate, true));
+      const extra = await fetchAutocomplete(alternate, true);
+      record('autocomplete(言い換えで補充)', alternate, extra);
+      add(extra);
       ranked = rankByNameMatch([...collected.values()], query, limit);
+      if (trace && ranked.length > 0) trace.source = 'autocomplete';
     } catch (e) {
       console.warn('補充検索に失敗しました', e);
     }
   }
-
   if (ranked.length > 0) return ranked;
 
-  // フォールバック：タイプで絞らずに引き、駅らしい候補だけ残す
+  // ここから先は0件だったときの救済措置。
+
+  // 1) タイプで絞らずに引き、駅らしい候補だけ残す
   const loose = await fetchAutocomplete(query, false);
-  return rankByNameMatch(
+  record('autocomplete(タイプ指定なし)', query, loose);
+  const looseStations = rankByNameMatch(
     loose.filter((s) => looksLikeStation(s.name, s.address)),
     query,
     limit,
   );
+  if (looseStations.length > 0) {
+    if (trace) trace.source = 'autocomplete-loose';
+    return looseStations;
+  }
+
+  // 2) Autocomplete では拾えない場合の最終手段。実在の場所を返す Text Search で探す。
+  //    単価が高いのでここまで来たときだけ使う。
+  const byText = await searchStationsByText(query, limit);
+  record('text-search', query, byText);
+  if (trace) trace.source = byText.length > 0 ? 'text-search' : 'none';
+  return byText;
 }
 
 interface PlaceDetails {
@@ -391,6 +429,68 @@ export async function searchVenues(params: {
     },
   );
   return data.places ?? [];
+}
+
+interface StationTextSearchResponse {
+  places?: {
+    id: string;
+    displayName?: { text?: string };
+    formattedAddress?: string;
+    primaryType?: string;
+    location?: { latitude: number; longitude: number };
+  }[];
+}
+
+/**
+ * Text Search で駅を探す。Autocomplete が0件を返したときの代替経路。
+ *
+ * Autocomplete は挙動がGoogle側の都合（対応タイプ・地域）に左右されるが、
+ * Text Search は実在の場所を返すため取りこぼしにくい。緯度経度も一緒に返るので
+ * 選択時の Place Details を省ける。単価は高いので0件時のみ使う。
+ */
+export async function searchStationsByText(
+  query: string,
+  limit = 5,
+): Promise<Suggestion[]> {
+  const textQuery = /(駅|停留場|停留所)$/.test(query) ? query : `${query}駅`;
+  const data = await callGoogle<StationTextSearchResponse>(
+    `${PLACES_BASE}/places:searchText`,
+    {
+      method: 'POST',
+      fieldMask: [
+        'places.id',
+        'places.displayName',
+        'places.formattedAddress',
+        'places.primaryType',
+        'places.location',
+      ].join(','),
+      body: JSON.stringify({
+        textQuery,
+        languageCode: 'ja',
+        regionCode: 'JP',
+        maxResultCount: 20,
+      }),
+    },
+  );
+
+  const found = (data.places ?? [])
+    .map((p) => ({
+      placeId: p.id,
+      name: p.displayName?.text ?? '',
+      address: p.formattedAddress ?? '',
+      primaryType: p.primaryType ?? '',
+      location: p.location
+        ? { lat: p.location.latitude, lng: p.location.longitude }
+        : undefined,
+    }))
+    .filter(
+      (p) =>
+        STATION_PRIMARY_TYPES.includes(p.primaryType) ||
+        looksLikeStation(p.name, p.address),
+    )
+    .map(({ primaryType: _primaryType, ...rest }) => rest);
+
+  return rankByNameMatch(found, query, limit);
 }
 
 /** 写真の実URLを解決する（キーを露出させないためサーバ経由でリダイレクトする） */
