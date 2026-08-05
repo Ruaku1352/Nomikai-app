@@ -12,22 +12,30 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
+      includeAssets: [
+        'icon.svg',
+        'icon-maskable.svg',
+        'apple-touch-icon.png',
+        'icons/icon-192.png',
+        'icons/icon-512.png',
+        'icons/icon-maskable-512.png',
+      ],
       manifest: {
         name: '飲み会集合場所決め',
-        short_name: '集合場所',
+        short_name: '飲み会マップ',
         description:
           'メンバーの最寄駅から、みんなが集まりやすい駅とお店を提案するアプリ',
         lang: 'ja',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        // アイコンの背景（藍色）と揃える
+        theme_color: '#16233D',
+        background_color: '#16233D',
         display: 'standalone',
         start_url: '/',
         icons: [
-          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
           {
-            src: 'icons/icon-512.png',
+            src: '/icons/icon-maskable-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',

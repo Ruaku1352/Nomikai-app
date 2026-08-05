@@ -230,6 +230,36 @@ curl 'https://<your-app>.web.app/api/stations/autocomplete?q=渋谷&debug=1'
 
 ---
 
+## アイコン
+
+`public/icon.svg`（通常）と `public/icon-maskable.svg`（Android の切り抜き対応版。
+角丸なしで中央80%に収めたもの）が原本です。SVGを編集したら次を実行してPNGを作り直します。
+
+```bash
+npm run icons
+```
+
+| 生成物 | サイズ | 元 |
+|---|---|---|
+| `public/icons/icon-192.png` | 192×192 | `icon.svg` |
+| `public/icons/icon-512.png` | 512×512 | `icon.svg` |
+| `public/icons/icon-maskable-512.png` | 512×512 | `icon-maskable.svg` |
+| `public/apple-touch-icon.png` | 180×180 | `icon.svg` |
+
+生成したPNGはデプロイに必要なのでリポジトリにコミットしています。
+
+**色を変えるときの対応箇所**（いずれも2つのSVGの両方を直す）:
+
+| 色 | 用途 | SVG内の場所 |
+|---|---|---|
+| `#16233D` | 背景の藍色（暖簾のイメージ） | 先頭の `<rect>` の `fill`。`vite.config.ts` の `theme_color` / `background_color` と `index.html` の `theme-color` も揃える |
+| `#F2A63B` | ビール本体 | 各ジョッキの本体 `<path>` の `fill` |
+| `#FFF4E2` | 泡 | 各ジョッキ上部の `<path>` の `fill`。ハイライトの `<rect>`（`opacity="0.32"`）にも使用 |
+| `#D9862A` | 取っ手 | 各ジョッキの取っ手 `<path>` の `stroke` |
+| `#FFD27A` | 乾杯の効果線 | 上部3本の `<path>` を囲む `<g>` の `stroke` |
+
+---
+
 ## テスト
 
 ```bash
