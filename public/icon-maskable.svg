@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="乾杯するビールジョッキ">
+  <title>飲み会集合場所決めアプリ</title>
+  <rect width="512" height="512" fill="#16233D"/>
+  <g transform="translate(256,262) scale(0.78)">
+    <g stroke="#FFD27A" stroke-width="13" stroke-linecap="round" fill="none">
+      <path d="M0,-128 V-158"/>
+      <path d="M-40,-118 L-58,-142"/>
+      <path d="M40,-118 L58,-142"/>
+    </g>
+    <g transform="translate(-80,24) rotate(16) scale(-1,1)">
+      <path d="M55,-24 Q94,-24 94,14 Q94,52 55,52" fill="none" stroke="#D9862A" stroke-width="20" stroke-linecap="round"/>
+      <path d="M-55,-60 H55 V56 Q55,80 31,80 H-31 Q-55,80 -55,56 Z" fill="#F2A63B"/>
+      <rect x="-42" y="-44" width="17" height="98" rx="8.5" fill="#FFF4E2" opacity="0.32"/>
+      <path d="M-59,-58 V-70 Q-59,-90 -40,-85 Q-30,-101 -13,-92 Q2,-104 16,-91 Q30,-100 41,-85 Q60,-90 59,-68 V-58 Z" fill="#FFF4E2"/>
+    </g>
+    <g transform="translate(80,24) rotate(-16)">
+      <path d="M55,-24 Q94,-24 94,14 Q94,52 55,52" fill="none" stroke="#D9862A" stroke-width="20" stroke-linecap="round"/>
+      <path d="M-55,-60 H55 V56 Q55,80 31,80 H-31 Q-55,80 -55,56 Z" fill="#F2A63B"/>
+      <rect x="-42" y="-44" width="17" height="98" rx="8.5" fill="#FFF4E2" opacity="0.32"/>
+      <path d="M-59,-58 V-70 Q-59,-90 -40,-85 Q-30,-101 -13,-92 Q2,-104 16,-91 Q30,-100 41,-85 Q60,-90 59,-68 V-58 Z" fill="#FFF4E2"/>
+    </g>
+  </g>
+</svg>
