@@ -16,14 +16,14 @@ export function MembersScreen() {
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-xl font-bold text-white">メンバーの最寄駅</h1>
-        <p className="mt-1 text-sm text-white/50">
+        <h1 className="text-xl font-bold text-ink">メンバーの最寄駅</h1>
+        <p className="mt-1 text-sm text-ink-faint">
           飲み会直前にいる場所の最寄駅を入力してください。
         </p>
       </header>
 
       <div className="flex items-center gap-3">
-        <label htmlFor="count" className="text-sm text-white/70">
+        <label htmlFor="count" className="text-sm text-ink-soft">
           人数
         </label>
         <input
@@ -33,27 +33,27 @@ export function MembersScreen() {
           max={10}
           value={members.length}
           onChange={(e) => setMemberCount(Number(e.target.value))}
-          className="w-20 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-accent focus:outline-none"
+          className="w-20 rounded-xl border border-line bg-surface px-3 py-2 text-ink focus:border-accent focus:outline-none"
         />
-        <span className="text-xs text-white/40">2〜10人</span>
+        <span className="text-xs text-ink-faint">2〜10人</span>
       </div>
 
       <ul className="space-y-4">
         {members.map((m, i) => (
-          <li key={m.id} className="rounded-2xl border border-white/10 bg-surface p-4">
+          <li key={m.id} className="rounded-2xl border border-line bg-surface p-4 shadow-card">
             <div className="mb-2 flex items-center justify-between">
               <input
                 type="text"
                 value={m.name}
                 placeholder={`メンバー${i + 1}`}
                 onChange={(e) => updateMemberName(m.id, e.target.value)}
-                className="w-40 bg-transparent text-sm font-semibold text-white placeholder:text-white/40 focus:outline-none"
+                className="w-40 bg-transparent text-sm font-semibold text-ink placeholder:text-ink-faint focus:outline-none"
               />
               {members.length > 2 && (
                 <button
                   type="button"
                   onClick={() => removeMember(m.id)}
-                  className="text-xs text-white/40 hover:text-red-400"
+                  className="text-xs text-ink-faint hover:text-red-700"
                 >
                   削除
                 </button>
@@ -71,7 +71,7 @@ export function MembersScreen() {
         <button
           type="button"
           onClick={addMember}
-          className="w-full rounded-xl border border-dashed border-white/20 py-3 text-sm text-white/60 hover:border-accent hover:text-accent"
+          className="w-full rounded-xl border border-dashed border-line py-3 text-sm text-ink-soft hover:border-accent hover:text-accent-ink"
         >
           ＋ メンバーを追加
         </button>
@@ -81,7 +81,7 @@ export function MembersScreen() {
         type="button"
         disabled={!canProceed}
         onClick={() => setStep('genres')}
-        className="w-full rounded-xl bg-accent py-4 text-base font-bold text-black disabled:bg-white/10 disabled:text-white/30"
+        className="w-full rounded-xl bg-accent py-4 text-base font-bold text-ink shadow-card transition-colors disabled:bg-line disabled:text-ink-faint disabled:shadow-none"
       >
         {canProceed ? '次へ：ジャンルを選ぶ' : '最寄駅を2人以上入力してください'}
       </button>

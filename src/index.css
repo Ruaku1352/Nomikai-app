@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html,
@@ -13,7 +13,7 @@ body,
 }
 
 body {
-  @apply bg-base text-white antialiased;
+  @apply bg-canvas text-ink antialiased;
   font-family:
     system-ui,
     -apple-system,

@@ -29,11 +29,11 @@ export function ResultScreen() {
   if (!result) {
     return (
       <div className="space-y-4">
-        <p className="text-white/60">まだ検索結果がありません。</p>
+        <p className="text-ink-soft">まだ検索結果がありません。</p>
         <button
           type="button"
           onClick={() => setStep('members')}
-          className="w-full rounded-xl bg-accent py-4 font-bold text-black"
+          className="w-full rounded-xl bg-accent py-4 font-bold text-ink shadow-card"
         >
           最初から入力する
         </button>
@@ -45,8 +45,8 @@ export function ResultScreen() {
     <div className="space-y-5">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">集合場所の候補</h1>
-          <p className="mt-1 text-xs text-white/40">
+          <h1 className="text-xl font-bold text-ink">集合場所の候補</h1>
+          <p className="mt-1 text-xs text-ink-faint">
             {result.members.length}人 / {result.genres.join('・')} /{' '}
             {new Date(result.createdAt).toLocaleString('ja-JP')}時点
           </p>
@@ -54,19 +54,19 @@ export function ResultScreen() {
         <button
           type="button"
           onClick={() => setStep('members')}
-          className="shrink-0 rounded-xl border border-white/15 px-3 py-2 text-xs text-white/70"
+          className="shrink-0 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink-soft"
         >
           条件を変更
         </button>
       </header>
 
-      <div className="flex rounded-xl border border-white/10 bg-surface p-1">
+      <div className="flex rounded-xl border border-line bg-surface p-1">
         <button
           type="button"
           onClick={() => setSortMode('sum')}
           aria-pressed={sortMode === 'sum'}
           className={`flex-1 rounded-lg py-2 text-sm font-semibold ${
-            sortMode === 'sum' ? 'bg-accent text-black' : 'text-white/60'
+            sortMode === 'sum' ? 'bg-accent text-ink shadow-card' : 'text-ink-soft'
           }`}
         >
           合計距離が短い
@@ -76,7 +76,7 @@ export function ResultScreen() {
           onClick={() => setSortMode('max')}
           aria-pressed={sortMode === 'max'}
           className={`flex-1 rounded-lg py-2 text-sm font-semibold ${
-            sortMode === 'max' ? 'bg-accent text-black' : 'text-white/60'
+            sortMode === 'max' ? 'bg-accent text-ink shadow-card' : 'text-ink-soft'
           }`}
         >
           一番遠い人が近い
@@ -102,8 +102,8 @@ export function ResultScreen() {
         ))}
       </div>
 
-      <p className="pb-6 text-[11px] leading-relaxed text-white/30">
-        駅の順位は<strong className="text-white/50">直線距離をもとにした目安</strong>
+      <p className="pb-6 text-[11px] leading-relaxed text-ink-faint">
+        駅の順位は<strong className="text-ink-soft">直線距離をもとにした目安</strong>
         です。実際の電車での所要時間とは異なります。お店の情報は Google Places
         のデータで、表示時点のものです。最新の営業状況は各店舗にご確認ください。
       </p>

@@ -24,30 +24,30 @@ export function StationCard({
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${station.location.lat},${station.location.lng}&query_place_id=${station.placeId}`;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-white/10 bg-surface">
+    <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
         className="flex w-full items-center gap-3 p-4 text-left"
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-black">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-ink">
           {rank}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-base font-semibold text-white">
+          <span className="block truncate text-base font-semibold text-ink">
             {station.name}
           </span>
-          <span className="block text-xs text-white/50">
+          <span className="block text-xs text-ink-faint">
             平均 {formatDistance(station.avgMeters)} / 最長{' '}
             {formatDistance(station.maxMeters)}
-            <span className="ml-2 text-accent">
+            <span className="ml-2 text-accent-ink">
               {sortMode === 'sum' ? '合計距離が最小' : '最長距離が最小'}
             </span>
           </span>
         </span>
         <span
-          className={`shrink-0 text-white/40 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          className={`shrink-0 text-ink-faint transition-transform ${expanded ? 'rotate-180' : ''}`}
           aria-hidden
         >
           ▾
@@ -55,20 +55,20 @@ export function StationCard({
       </button>
 
       {expanded && (
-        <div className="border-t border-white/10 p-4">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">
+        <div className="border-t border-line p-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
             メンバー別の距離（直線）
           </h3>
           <ul className="mb-4 space-y-1">
             {members.map((m, i) => (
               <li key={m.id} className="flex justify-between text-sm">
-                <span className="truncate text-white/70">
+                <span className="truncate text-ink-soft">
                   {m.name || `メンバー${i + 1}`}
-                  <span className="ml-1 text-white/30">
+                  <span className="ml-1 text-ink-faint">
                     （{m.station?.name}）
                   </span>
                 </span>
-                <span className="ml-2 shrink-0 text-white">
+                <span className="ml-2 shrink-0 text-ink">
                   {formatDistance(station.distances[m.id])}
                 </span>
               </li>
@@ -79,25 +79,25 @@ export function StationCard({
             href={mapsUrl}
             target="_blank"
             rel="noreferrer"
-            className="mb-4 inline-block text-sm text-accent underline"
+            className="mb-4 inline-block text-sm text-accent-ink underline"
           >
             地図で開く
           </a>
 
           {groups === undefined ? (
-            <p className="text-sm text-white/40">お店を読み込み中…</p>
+            <p className="text-sm text-ink-faint">お店を読み込み中…</p>
           ) : groups.length === 0 ? (
-            <p className="text-sm text-white/40">
+            <p className="text-sm text-ink-faint">
               条件に合うお店が見つかりませんでした。
             </p>
           ) : (
             groups.map((group) => (
               <div key={group.genre} className="mb-4 last:mb-0">
-                <h3 className="mb-2 text-sm font-semibold text-white">
+                <h3 className="mb-2 text-sm font-semibold text-ink">
                   {group.genre}
                 </h3>
                 {group.venues.length === 0 ? (
-                  <p className="text-xs text-white/40">
+                  <p className="text-xs text-ink-faint">
                     このジャンルのお店は見つかりませんでした。
                   </p>
                 ) : (
