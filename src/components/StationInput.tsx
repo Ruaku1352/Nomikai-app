@@ -172,24 +172,24 @@ export function StationInput({ value, placeholder, onChange }: Props) {
           setComposing(false);
           setQuery(e.currentTarget.value);
         }}
-        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white placeholder:text-white/30 focus:border-accent focus:outline-none"
+        className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-base text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
       />
       {pending && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40">
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-faint">
           検索中…
         </span>
       )}
       {value && !pending && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-emerald-400">
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-emerald-600">
           ✓
         </span>
       )}
 
       {error && (
-        <p className="mt-1 text-xs text-red-400">
+        <p className="mt-1 text-xs text-red-700">
           {error.message}
           {error.details && (
-            <span className="mt-0.5 block break-all text-[10px] text-red-400/60">
+            <span className="mt-0.5 block break-all text-[10px] text-red-700/70">
               {error.details}
             </span>
           )}
@@ -197,7 +197,7 @@ export function StationInput({ value, placeholder, onChange }: Props) {
       )}
 
       {open && suggestions.length === 0 && !pending && !error && (
-        <p className="mt-1 text-xs text-white/30">
+        <p className="mt-1 text-xs text-ink-faint">
           該当する駅が見つかりません
         </p>
       )}
@@ -205,7 +205,7 @@ export function StationInput({ value, placeholder, onChange }: Props) {
       {open && suggestions.length > 0 && (
         <ul
           role="listbox"
-          className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-white/10 bg-surface shadow-xl"
+          className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-line bg-surface shadow-lg"
         >
           {suggestions.map((s, i) => (
             <li key={s.placeId}>
@@ -216,13 +216,13 @@ export function StationInput({ value, placeholder, onChange }: Props) {
                 onMouseEnter={() => setActiveIndex(i)}
                 onClick={() => void select(s)}
                 className={`w-full px-4 py-3 text-left ${
-                  i === activeIndex ? 'bg-white/10' : ''
+                  i === activeIndex ? 'bg-accent-soft' : ''
                 }`}
               >
-                <span className="block text-sm text-white">
+                <span className="block text-sm text-ink">
                   <Highlight text={s.name} query={query} />
                 </span>
-                <span className="block truncate text-xs text-white/40">
+                <span className="block truncate text-xs text-ink-faint">
                   {s.address}
                 </span>
               </button>
@@ -243,7 +243,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
   return (
     <>
       {text.slice(0, at)}
-      <mark className="bg-transparent font-bold text-accent">
+      <mark className="bg-transparent font-bold text-accent-ink">
         {text.slice(at, at + q.length)}
       </mark>
       {text.slice(at + q.length)}

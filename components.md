@@ -59,7 +59,28 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 - `vite-plugin-pwa` の `generateSW` モードで Service Worker とマニフェストを自動生成（`vite.config.ts`）
 - **`/api/**` と `maps.googleapis.com` はキャッシュしない**（Places APIのキャッシュ期間制限に抵触しないため）
 - オフライン時の閲覧は Service Worker ではなく、localStorage に保存した直前の結果で担保する
-- アイコン: `public/icons/icon-192.png`, `icon-512.png`（maskable兼用）、`public/favicon.svg`
+- アイコン: `public/icon.svg`（原本）、`public/icon-maskable.svg`、
+  `public/icons/`（192 / 512 / maskable-512）、`public/apple-touch-icon.png`
+
+### 配色
+
+明るい配色。色は `tailwind.config.js` の `colors` に用途名で定義してあり、変更はそこだけで済みます。
+
+| 色名 | 値 | 用途 |
+|---|---|---|
+| `canvas` | `#F7F4EE` | 画面の背景（生成り） |
+| `surface` | `#FFFFFF` | カード・入力欄 |
+| `ink` | `#16233D` | 主要な文字（アイコンの藍色） |
+| `ink-soft` | `#4A5875` | 補足の文字 |
+| `ink-faint` | `#6B7590` | プレースホルダなど |
+| `line` | `#E5DFD3` | 罫線・枠線 |
+| `accent` | `#E9A13B` | ボタン・選択中（アイコンのビールの琥珀） |
+| `accent-ink` | `#A9660C` | 明るい背景に置く accent 色の文字 |
+| `accent-soft` | `#FDF1DE` | 選択中の淡い背景 |
+
+> **色名の注意**: Tailwind 標準のユーティリティ名と衝突する名前は使えません。
+> 背景色を `base` にすると `text-base`（フォントサイズ）が文字色として再定義され、
+> `text-base` を指定した箇所の文字色が壊れます。そのため `canvas` にしています。
 
 ---
 

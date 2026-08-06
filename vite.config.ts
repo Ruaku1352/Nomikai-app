@@ -26,9 +26,9 @@ export default defineConfig({
         description:
           'メンバーの最寄駅から、みんなが集まりやすい駅とお店を提案するアプリ',
         lang: 'ja',
-        // アイコンの背景（藍色）と揃える
-        theme_color: '#16233D',
-        background_color: '#16233D',
+        // アプリの背景（生成り）と揃える。起動時のスプラッシュもこの色になる
+        theme_color: '#F7F4EE',
+        background_color: '#F7F4EE',
         display: 'standalone',
         start_url: '/',
         icons: [

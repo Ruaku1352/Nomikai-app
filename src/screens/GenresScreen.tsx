@@ -18,8 +18,8 @@ export function GenresScreen() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-xl font-bold text-white">お店のジャンル</h1>
-        <p className="mt-1 text-sm text-white/50">複数選択できます。</p>
+        <h1 className="text-xl font-bold text-ink">お店のジャンル</h1>
+        <p className="mt-1 text-sm text-ink-faint">複数選択できます。</p>
       </header>
 
       <div className="grid grid-cols-2 gap-3">
@@ -33,8 +33,8 @@ export function GenresScreen() {
               aria-pressed={on}
               className={`rounded-2xl border py-4 text-base font-semibold transition-colors ${
                 on
-                  ? 'border-accent bg-accent/20 text-accent'
-                  : 'border-white/10 bg-surface text-white/70'
+                  ? 'border-accent bg-accent-soft text-accent-ink shadow-card'
+                  : 'border-line bg-surface text-ink-soft shadow-card'
               }`}
             >
               {g}
@@ -44,7 +44,7 @@ export function GenresScreen() {
       </div>
 
       <div>
-        <label htmlFor="custom" className="mb-2 block text-sm text-white/70">
+        <label htmlFor="custom" className="mb-2 block text-sm text-ink-soft">
           その他（自由入力）
         </label>
         <input
@@ -53,12 +53,12 @@ export function GenresScreen() {
           value={customGenre}
           placeholder="例：イタリアン、餃子"
           onChange={(e) => setCustomGenre(e.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 focus:border-accent focus:outline-none"
+          className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
         />
       </div>
 
       <div>
-        <label htmlFor="time" className="mb-2 block text-sm text-white/70">
+        <label htmlFor="time" className="mb-2 block text-sm text-ink-soft">
           集合したい時間帯（任意）
         </label>
         <input
@@ -66,16 +66,16 @@ export function GenresScreen() {
           type="time"
           value={meetTime}
           onChange={(e) => setMeetTime(e.target.value)}
-          className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white focus:border-accent focus:outline-none"
+          className="rounded-xl border border-line bg-surface px-4 py-3 text-ink focus:border-accent focus:outline-none"
         />
-        <p className="mt-1 text-xs text-white/40">
+        <p className="mt-1 text-xs text-ink-faint">
           お店の営業時間フィルタに使います。
         </p>
       </div>
 
       <div>
-        <p className="mb-2 text-sm text-white/70">駅の選び方</p>
-        <div className="flex rounded-xl border border-white/10 bg-surface p-1">
+        <p className="mb-2 text-sm text-ink-soft">駅の選び方</p>
+        <div className="flex rounded-xl border border-line bg-surface p-1">
           <ModeButton
             active={sortMode === 'sum'}
             onClick={() => setSortMode('sum')}
@@ -95,7 +95,7 @@ export function GenresScreen() {
         <button
           type="button"
           onClick={() => setStep('members')}
-          className="rounded-xl border border-white/15 px-5 py-4 text-sm text-white/70"
+          className="rounded-xl border border-line bg-surface px-5 py-4 text-sm text-ink-soft"
         >
           戻る
         </button>
@@ -103,7 +103,7 @@ export function GenresScreen() {
           type="button"
           disabled={selected === 0 || loading}
           onClick={() => void search()}
-          className="flex-1 rounded-xl bg-accent py-4 text-base font-bold text-black disabled:bg-white/10 disabled:text-white/30"
+          className="flex-1 rounded-xl bg-accent py-4 text-base font-bold text-ink shadow-card transition-colors disabled:bg-line disabled:text-ink-faint disabled:shadow-none"
         >
           {loading ? '検索中…' : '集合場所を探す'}
         </button>
@@ -129,12 +129,12 @@ function ModeButton({
       onClick={onClick}
       aria-pressed={active}
       className={`flex-1 rounded-lg px-3 py-2 text-center ${
-        active ? 'bg-accent text-black' : 'text-white/60'
+        active ? 'bg-accent text-ink shadow-card' : 'text-ink-soft'
       }`}
     >
       <span className="block text-sm font-semibold">{label}</span>
       <span
-        className={`block text-[11px] ${active ? 'text-black/60' : 'text-white/30'}`}
+        className={`block text-[11px] ${active ? 'text-ink/70' : 'text-ink-faint'}`}
       >
         {hint}
       </span>

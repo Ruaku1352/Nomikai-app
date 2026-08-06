@@ -22,7 +22,7 @@ export default function App() {
   const online = useOnline();
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-base px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-canvas px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
       <nav className="mb-5 flex items-center gap-2" aria-label="ステップ">
         {STEPS.map((s, i) => {
           const active = s.key === step;
@@ -35,10 +35,10 @@ export default function App() {
               onClick={() => setStep(s.key)}
               className={`flex-1 rounded-full py-1.5 text-xs font-semibold ${
                 active
-                  ? 'bg-accent text-black'
+                  ? 'bg-accent text-ink shadow-card'
                   : reachable
-                    ? 'bg-white/5 text-white/50'
-                    : 'bg-white/5 text-white/20'
+                    ? 'border border-line bg-surface text-ink-soft'
+                    : 'border border-line/60 bg-surface/60 text-ink-faint/50'
               }`}
             >
               {i + 1}. {s.label}
@@ -48,7 +48,7 @@ export default function App() {
       </nav>
 
       {!online && (
-        <p className="mb-4 rounded-xl bg-amber-500/15 px-4 py-3 text-xs text-amber-300">
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-100 px-4 py-3 text-xs text-amber-800">
           オフラインです。直前の検索結果のみ閲覧できます。
         </p>
       )}
@@ -56,17 +56,17 @@ export default function App() {
       {error && (
         <div
           role="alert"
-          className="mb-4 flex items-start gap-2 rounded-xl bg-red-500/15 px-4 py-3 text-sm text-red-300"
+          className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
         >
           <span className="flex-1">
             {error}
             {errorDetails && (
-              <span className="mt-1 block break-all text-[11px] text-red-300/60">
+              <span className="mt-1 block break-all text-[11px] text-red-700/70">
                 {errorDetails}
               </span>
             )}
           </span>
-          <button type="button" onClick={clearError} className="text-red-300/60">
+          <button type="button" onClick={clearError} className="text-red-700/70">
             ✕
           </button>
         </div>
@@ -79,9 +79,9 @@ export default function App() {
       </main>
 
       {loading && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-base/80 backdrop-blur-sm">
-          <span className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-accent" />
-          <p className="text-sm text-white/70">{loadingMessage || '処理中…'}</p>
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-canvas/85 backdrop-blur-sm">
+          <span className="h-10 w-10 animate-spin rounded-full border-2 border-line border-t-accent" />
+          <p className="text-sm text-ink-soft">{loadingMessage || '処理中…'}</p>
         </div>
       )}
     </div>
