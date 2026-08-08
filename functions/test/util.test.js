@@ -221,8 +221,8 @@ test('rankByNameMatch: 完全一致を先頭にし、前方一致・部分一致
 
 test('rankByNameMatch: 同名の駅（JRと地下鉄）は1つにまとめる', () => {
   const suggestions = [
-    { placeId: 'jr', name: '渋谷駅', address: 'JR' },
-    { placeId: 'metro', name: '渋谷駅', address: '東京メトロ' },
+    { placeId: 'jr', name: '渋谷駅', address: '日本、東京都渋谷区渋谷２丁目' },
+    { placeId: 'metro', name: '渋谷駅', address: '日本、東京都渋谷区道玄坂１丁目' },
   ];
   assert.equal(rankByNameMatch(suggestions, '渋谷', 5).length, 1);
 });
@@ -415,4 +415,151 @@ test('formatPriceRange: 情報が無ければ null（行を出さない）', () 
   assert.equal(formatPriceRange(undefined), null);
   assert.equal(formatPriceRange({}), null);
   assert.equal(formatPriceRange({ startPrice: { units: 'abc' } }), null);
+});
+
+/* ------------------------------- 同名の別駅・事業者名（報告された不具合） */
+
+const { stripRailwayPrefix } = require('../lib/util');
+
+test('rankByNameMatch: 同名でも離れていれば別の駅として両方残す', () => {
+  // 桜井駅は奈良県桜井市（JR・近鉄）と大阪府箕面市（阪急）に別々に存在する。
+  // 名前だけで重複排除すると、阪急の桜井駅が候補から消えてしまっていた。
+  const suggestions = [
+    {
+      placeId: 'nara',
+      name: '桜井駅',
+      address: '奈良県桜井市',
+      location: { lat: 34.5163, lng: 135.8433 },
+    },
+    {
+      placeId: 'hankyu',
+      name: '桜井駅',
+      address: '大阪府箕面市桜井',
+      location: { lat: 34.8206, lng: 135.4739 },
+    },
+  ];
+  const ranked = rankByNameMatch(suggestions, '桜井', 5);
+  assert.equal(ranked.length, 2);
+  assert.deepEqual(
+    ranked.map((s) => s.placeId),
+    ['nara', 'hankyu'],
+  );
+});
+
+test('rankByNameMatch: 同じ駅の別事業者は1件にまとめる（近接）', () => {
+  // JRと東京メトロの渋谷駅は別 placeId だが同じ駅
+  const suggestions = [
+    {
+      placeId: 'jr',
+      name: '渋谷駅',
+      address: '東京都渋谷区',
+      location: { lat: 35.658, lng: 139.7016 },
+    },
+    {
+      placeId: 'metro',
+      name: '渋谷駅',
+      address: '東京都渋谷区',
+      location: { lat: 35.6592, lng: 139.7005 },
+    },
+  ];
+  assert.equal(rankByNameMatch(suggestions, '渋谷', 5).length, 1);
+});
+
+test('rankByNameMatch: 位置が無い候補は住所で別駅を判定する', () => {
+  // Autocomplete 経由の候補には緯度経度が無い
+  const suggestions = [
+    { placeId: 'a', name: '桜井駅', address: '奈良県桜井市' },
+    { placeId: 'b', name: '桜井駅', address: '大阪府箕面市' },
+    { placeId: 'c', name: '桜井駅', address: '奈良県桜井市' },
+  ];
+  const ranked = rankByNameMatch(suggestions, '桜井', 5);
+  assert.equal(ranked.length, 2, '住所が同じ a と c だけがまとまる');
+  assert.deepEqual(
+    ranked.map((s) => s.placeId),
+    ['a', 'b'],
+  );
+});
+
+test('stripRailwayPrefix: 先頭の事業者名だけを外す', () => {
+  assert.equal(stripRailwayPrefix('阪急桜井'), '桜井');
+  assert.equal(stripRailwayPrefix('jr難波'), '難波');
+  assert.equal(stripRailwayPrefix('近鉄奈良'), '奈良');
+  // 駅名そのものが事業者名で始まるだけの場合は壊さない
+  assert.equal(stripRailwayPrefix('桜井'), '桜井');
+  // 事業者名だけの入力は空にしない
+  assert.equal(stripRailwayPrefix('阪急'), '阪急');
+});
+
+test('scoreStationNameMatch: 事業者名付きで入力しても駅名に一致する', () => {
+  assert.equal(scoreStationNameMatch('桜井駅', '阪急桜井'), 3);
+  assert.equal(scoreStationNameMatch('桜井駅', '阪急桜井駅'), 3);
+  assert.equal(scoreStationNameMatch('難波駅', 'JR難波'), 3);
+  // 駅名側に事業者名が付いているケース
+  assert.equal(scoreStationNameMatch('阪急梅田駅', '梅田'), 3);
+});
+
+test('scoreStationNameMatch: 事業者名対応で無関係な駅を拾わない', () => {
+  assert.equal(scoreStationNameMatch('新大阪駅', '阪急桜井'), 0);
+});
+
+const { addressArea } = require('../lib/util');
+
+test('addressArea: 市区町村までに丸める', () => {
+  assert.equal(addressArea('日本、東京都渋谷区道玄坂１丁目'), '東京都渋谷区');
+  assert.equal(addressArea('〒150-0002 東京都渋谷区渋谷２丁目２４'), '東京都渋谷区');
+  assert.equal(addressArea('奈良県桜井市大字桜井'), '奈良県桜井市');
+  assert.equal(addressArea('大阪府箕面市桜井'), '大阪府箕面市');
+  assert.equal(addressArea('神奈川県横浜市西区'), '神奈川県横浜市');
+});
+
+test('addressArea: 同じ駅は同じ値、別の市なら違う値になる', () => {
+  assert.equal(
+    addressArea('日本、東京都渋谷区渋谷２丁目'),
+    addressArea('日本、東京都渋谷区道玄坂１丁目'),
+  );
+  assert.notEqual(addressArea('奈良県桜井市'), addressArea('大阪府箕面市桜井'));
+});
+
+/* --------------------------------------------- 地名を併記した入力 */
+
+const { splitQuery, scoreAddressHint } = require('../lib/util');
+
+test('splitQuery: 全角・半角の空白で区切る', () => {
+  assert.deepEqual(splitQuery('桜井 箕面'), ['桜井', '箕面']);
+  assert.deepEqual(splitQuery('桜井　箕面'), ['桜井', '箕面']);
+  assert.deepEqual(splitQuery('  桜井  '), ['桜井']);
+  assert.deepEqual(splitQuery(''), []);
+});
+
+test('scoreStationNameMatch: 地名を併記しても駅名に一致する', () => {
+  // 連結して比較していた頃は 0 になり、候補が全滅していた
+  assert.equal(scoreStationNameMatch('桜井駅', '桜井 箕面'), 3);
+  assert.equal(scoreStationNameMatch('渋谷駅', '渋谷 東京'), 3);
+});
+
+test('scoreAddressHint: 駅名に使われなかった語が住所にあれば加点', () => {
+  assert.equal(scoreAddressHint('大阪府箕面市桜井', '桜井 箕面', '桜井駅'), 1);
+  assert.equal(scoreAddressHint('奈良県桜井市', '桜井 箕面', '桜井駅'), 0);
+  // 駅名に一致した語は住所側の手がかりに数えない
+  assert.equal(scoreAddressHint('奈良県桜井市', '桜井', '桜井駅'), 0);
+});
+
+test('rankByNameMatch: 地名を併記すると目的の駅が先頭に来る', () => {
+  const suggestions = [
+    {
+      placeId: 'nara',
+      name: '桜井駅',
+      address: '奈良県桜井市大字桜井',
+      location: { lat: 34.5163, lng: 135.8433 },
+    },
+    {
+      placeId: 'hankyu',
+      name: '桜井駅',
+      address: '大阪府箕面市桜井１丁目',
+      location: { lat: 34.8206, lng: 135.4739 },
+    },
+  ];
+  assert.equal(rankByNameMatch(suggestions, '桜井 箕面', 5)[0].placeId, 'hankyu');
+  // 地名を付けなければGoogleの順序のまま
+  assert.equal(rankByNameMatch(suggestions, '桜井', 5)[0].placeId, 'nara');
 });
