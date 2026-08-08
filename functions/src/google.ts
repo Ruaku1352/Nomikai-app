@@ -468,7 +468,14 @@ interface TextSearchResponse {
     photos?: { name: string }[];
     currentOpeningHours?: { openNow?: boolean; weekdayDescriptions?: string[] };
     regularOpeningHours?: OpeningHours;
+    priceRange?: PriceRange;
   }[];
+}
+
+/** Places API (New) の価格レンジ。Money は units が文字列で返る点に注意 */
+export interface PriceRange {
+  startPrice?: { currencyCode?: string; units?: string };
+  endPrice?: { currencyCode?: string; units?: string };
 }
 
 export interface OpeningHours {
@@ -479,29 +486,37 @@ export interface OpeningHours {
   }[];
 }
 
+const VENUE_FIELDS = [
+  'places.id',
+  'places.displayName',
+  'places.formattedAddress',
+  'places.location',
+  'places.rating',
+  'places.userRatingCount',
+  'places.priceLevel',
+  'places.googleMapsUri',
+  'places.photos',
+  'places.currentOpeningHours',
+  'places.regularOpeningHours',
+];
+
+/**
+ * 具体的な金額レンジ。priceLevel（¥¥ 等）より情報量が多いが、
+ * 提供されていない地域・時期にフィールドマスクごと拒否される可能性があるため、
+ * INVALID_ARGUMENT が返ったらこのフィールドを外して1度だけ再試行する。
+ */
+const PRICE_RANGE_FIELD = 'places.priceRange';
+
 export async function searchVenues(params: {
   textQuery: string;
   center: LatLng;
   radiusMeters: number;
   openNow: boolean;
 }) {
-  const data = await callGoogle<TextSearchResponse>(
-    `${PLACES_BASE}/places:searchText`,
-    {
+  const request = (fields: string[]) =>
+    callGoogle<TextSearchResponse>(`${PLACES_BASE}/places:searchText`, {
       method: 'POST',
-      fieldMask: [
-        'places.id',
-        'places.displayName',
-        'places.formattedAddress',
-        'places.location',
-        'places.rating',
-        'places.userRatingCount',
-        'places.priceLevel',
-        'places.googleMapsUri',
-        'places.photos',
-        'places.currentOpeningHours',
-        'places.regularOpeningHours',
-      ].join(','),
+      fieldMask: fields.join(','),
       body: JSON.stringify({
         textQuery: params.textQuery,
         languageCode: 'ja',
@@ -518,9 +533,19 @@ export async function searchVenues(params: {
           },
         },
       }),
-    },
-  );
-  return data.places ?? [];
+    });
+
+  try {
+    const data = await request([...VENUE_FIELDS, PRICE_RANGE_FIELD]);
+    return data.places ?? [];
+  } catch (e) {
+    if (!(e instanceof HttpError && e.details?.startsWith('INVALID_ARGUMENT'))) {
+      throw e;
+    }
+    console.warn('priceRange が拒否されたため、価格レンジ無しで再試行します');
+    const data = await request(VENUE_FIELDS);
+    return data.places ?? [];
+  }
 }
 
 interface StationTextSearchResponse {

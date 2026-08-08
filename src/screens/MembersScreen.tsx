@@ -1,5 +1,6 @@
 import { useAppStore } from '../store/useAppStore';
 import { StationInput } from '../components/StationInput';
+import { SavedGroups } from '../components/SavedGroups';
 
 export function MembersScreen() {
   const members = useAppStore((s) => s.members);
@@ -76,6 +77,8 @@ export function MembersScreen() {
           ＋ メンバーを追加
         </button>
       )}
+
+      <SavedGroups />
 
       <button
         type="button"

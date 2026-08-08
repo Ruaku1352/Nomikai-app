@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { rankStations } from '../lib/scoring';
+import { SORT_MODES, rankStations } from '../lib/scoring';
 import { StationCard } from '../components/StationCard';
 
 export function ResultScreen() {
@@ -60,27 +60,22 @@ export function ResultScreen() {
         </button>
       </header>
 
-      <div className="flex rounded-xl border border-line bg-surface p-1">
-        <button
-          type="button"
-          onClick={() => setSortMode('sum')}
-          aria-pressed={sortMode === 'sum'}
-          className={`flex-1 rounded-lg py-2 text-sm font-semibold ${
-            sortMode === 'sum' ? 'bg-accent text-ink shadow-card' : 'text-ink-soft'
-          }`}
-        >
-          合計距離が短い
-        </button>
-        <button
-          type="button"
-          onClick={() => setSortMode('max')}
-          aria-pressed={sortMode === 'max'}
-          className={`flex-1 rounded-lg py-2 text-sm font-semibold ${
-            sortMode === 'max' ? 'bg-accent text-ink shadow-card' : 'text-ink-soft'
-          }`}
-        >
-          一番遠い人が近い
-        </button>
+      <div className="flex gap-1 rounded-xl border border-line bg-surface p-1">
+        {SORT_MODES.map((m) => (
+          <button
+            key={m.mode}
+            type="button"
+            onClick={() => setSortMode(m.mode)}
+            aria-pressed={sortMode === m.mode}
+            className={`flex-1 rounded-lg px-1 py-2 text-xs font-semibold ${
+              sortMode === m.mode
+                ? 'bg-accent text-ink shadow-card'
+                : 'text-ink-soft'
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
       </div>
 
       <div className="space-y-3">

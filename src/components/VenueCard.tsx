@@ -32,10 +32,19 @@ export function VenueCard({ venue }: { venue: Venue }) {
           {venue.userRatingCount != null && (
             <span className="ml-1 text-ink-faint">({venue.userRatingCount})</span>
           )}
-          {venue.priceLevel && (
-            <span className="ml-2 text-ink-soft">{venue.priceLevel}</span>
-          )}
         </p>
+        {/* 平均予算。価格情報が無い店では行ごと出さない */}
+        {(venue.priceLevel || venue.priceRange) && (
+          <p className="mt-1 text-xs text-ink-soft">
+            {venue.priceLevel && (
+              <span className="font-medium">{venue.priceLevel}</span>
+            )}
+            {venue.priceLevel && venue.priceRange && (
+              <span className="mx-1 text-ink-faint">·</span>
+            )}
+            {venue.priceRange}
+          </p>
+        )}
         <p className="mt-1 text-xs text-ink-faint">
           {venue.walkMinutes != null && <>駅から徒歩約{venue.walkMinutes}分</>}
           {venue.openNow != null && (

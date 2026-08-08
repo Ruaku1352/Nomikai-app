@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AutocompleteSuggestion, StationRef } from '../types';
 import { ApiError, autocompleteStations, resolveStation } from '../lib/api';
+import { StationPicker } from './StationPicker';
 
 interface Props {
   value: StationRef | null;
@@ -34,6 +35,8 @@ export function StationInput({ value, placeholder, onChange }: Props) {
   const skipNextFetch = useRef(false);
   // 日本語入力の変換中は確定前の文字が流れてくるので、その間は検索しない
   const [composing, setComposing] = useState(false);
+  // 一覧（最大20件）を開いているか。開いたときにだけ追加のリクエストが飛ぶ
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     // 駅が確定したときだけ入力欄を同期する。
@@ -199,6 +202,16 @@ export function StationInput({ value, placeholder, onChange }: Props) {
       {open && suggestions.length === 0 && !pending && !error && (
         <p className="mt-1 text-xs text-ink-faint">
           該当する駅が見つかりません
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              setPickerOpen(true);
+            }}
+            className="ml-2 font-medium text-accent-ink underline"
+          >
+            一覧から探す
+          </button>
         </p>
       )}
 
@@ -228,7 +241,30 @@ export function StationInput({ value, placeholder, onChange }: Props) {
               </button>
             </li>
           ))}
+          <li className="border-t border-line">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setPickerOpen(true);
+              }}
+              className="w-full px-4 py-3 text-center text-sm font-medium text-accent-ink active:bg-accent-soft"
+            >
+              さらに表示
+            </button>
+          </li>
         </ul>
+      )}
+
+      {pickerOpen && (
+        <StationPicker
+          initialQuery={query}
+          onClose={() => setPickerOpen(false)}
+          onSelect={(s) => {
+            setPickerOpen(false);
+            void select(s);
+          }}
+        />
       )}
     </div>
   );

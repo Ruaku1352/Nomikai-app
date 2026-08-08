@@ -3,6 +3,7 @@ import { useAppStore } from './store/useAppStore';
 import { MembersScreen } from './screens/MembersScreen';
 import { GenresScreen } from './screens/GenresScreen';
 import { ResultScreen } from './screens/ResultScreen';
+import { BeerLoader } from './components/BeerLoader';
 
 const STEPS = [
   { key: 'members', label: 'メンバー' },
@@ -79,9 +80,12 @@ export default function App() {
       </main>
 
       {loading && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-canvas/85 backdrop-blur-sm">
-          <span className="h-10 w-10 animate-spin rounded-full border-2 border-line border-t-accent" />
-          <p className="text-sm text-ink-soft">{loadingMessage || '処理中…'}</p>
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-canvas/90 backdrop-blur-sm"
+        >
+          <BeerLoader message={loadingMessage || '処理中…'} />
         </div>
       )}
     </div>

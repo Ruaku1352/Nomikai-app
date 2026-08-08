@@ -53,6 +53,8 @@ interface AppState {
   setCustomGenre: (value: string) => void;
   setMeetTime: (value: string) => void;
   setSortMode: (mode: SortMode) => void;
+  /** 保存したメンバー構成を読み込む */
+  applyMembers: (members: Member[]) => void;
   clearError: () => void;
   reset: () => void;
   /** 選択中ジャンルの実効リスト（自由入力を含む） */
@@ -71,6 +73,14 @@ type PersistedState = Pick<
 const MAX_MEMBERS = 10;
 const MIN_MEMBERS = 2;
 
+/**
+ * ローディングを最低これだけ表示する（ビールのアニメーションを見せるため）。
+ * APIがこれより早く返っても待つが、これより遅い場合は打ち切らず完了を待つ。
+ */
+export const MIN_LOADING_MS = 3000;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -79,7 +89,7 @@ export const useAppStore = create<AppState>()(
       genres: ['居酒屋'],
       customGenre: '',
       meetTime: '',
-      sortMode: 'sum',
+      sortMode: 'fair',
       loading: false,
       loadingMessage: '',
       error: null,
@@ -135,6 +145,14 @@ export const useAppStore = create<AppState>()(
       setCustomGenre: (customGenre) => set({ customGenre }),
       setMeetTime: (meetTime) => set({ meetTime }),
       setSortMode: (sortMode) => set({ sortMode }),
+
+      applyMembers: (members) =>
+        set({
+          members: members.length >= MIN_MEMBERS ? members.map((m) => ({ ...m })) : members,
+          step: 'members',
+          error: null,
+          errorDetails: null,
+        }),
       clearError: () => set({ error: null, errorDetails: null }),
 
       reset: () =>
@@ -175,6 +193,9 @@ export const useAppStore = create<AppState>()(
           loadingMessage: '候補駅を探しています…',
         });
 
+        // 最低表示時間のタイマー。APIと並行して走らせ、両方が終わるのを待つ。
+        const minimumDisplay = sleep(MIN_LOADING_MS);
+
         try {
           const openAt = meetTime ? toIsoMeetTime(meetTime) : null;
           const { stations } = await fetchCandidates({ members: ready });
@@ -206,6 +227,9 @@ export const useAppStore = create<AppState>()(
             });
             venuesByStation[station.placeId] = groups;
           }
+
+          // ここまでが3秒より早く終わっていれば、残り時間だけ待つ
+          await minimumDisplay;
 
           set({
             loading: false,
@@ -285,10 +309,15 @@ export const useAppStore = create<AppState>()(
       name: 'nomikai-app',
       // v1 は所要時間ベース（sumMinutes / durations）の結果を保存していた。
       // 形が変わったので、保存済みの結果だけ捨てて入力内容は引き継ぐ。
-      version: 2,
+      // v2 まで: 並び順が sum/max のみで、駅にばらつきの値が無かった。
+      // 形が変わっているので保存済みの結果だけ捨て、入力内容は引き継ぐ。
+      version: 3,
       migrate: (persisted, version) => {
         const state = persisted as PersistedState;
-        if (state && version < 2) return { ...state, result: null };
+        if (!state) return state;
+        if (version < 3) {
+          return { ...state, result: null, sortMode: 'fair' as const };
+        }
         return state;
       },
       partialize: (s) => ({

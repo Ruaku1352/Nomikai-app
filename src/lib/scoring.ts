@@ -1,8 +1,12 @@
 import type { CandidateStation, SortMode, Venue } from '../types';
 
 /**
- * 4.3 スコアリング
- * score_sum = Σ(各メンバーの距離) / score_max = max(各メンバーの距離)
+ * 4.3 スコアリング（候補駅の並べ替え）
+ *
+ * - fair: 平均 + k×標準偏差。全員が同じくらいの距離になる駅を上位にする（既定）
+ * - sum : Σ(各メンバーの距離)。全体の移動量が最小
+ * - max : max(各メンバーの距離)。一番遠い人の負担が最小
+ *
  * 同点・僅差の場合は全員の重心に近い駅を優先する。
  */
 export function rankStations(
@@ -11,7 +15,7 @@ export function rankStations(
   limit = 3,
 ): CandidateStation[] {
   const scoreOf = (s: CandidateStation) =>
-    mode === 'sum' ? s.sumMeters : s.maxMeters;
+    mode === 'fair' ? s.fairnessMeters : mode === 'sum' ? s.sumMeters : s.maxMeters;
 
   return [...stations]
     .sort((a, b) => {
@@ -20,13 +24,40 @@ export function rankStations(
       // 乗換回数が取れないため、重心に近い方をタイブレークに使う
       const c = a.centroidMeters - b.centroidMeters;
       if (c !== 0) return c;
-      // それでも同じなら「もう一方の指標」で比較
-      return mode === 'sum'
-        ? a.maxMeters - b.maxMeters
-        : a.sumMeters - b.sumMeters;
+      return a.sumMeters - b.sumMeters;
     })
     .slice(0, limit);
 }
+
+/**
+ * 並び順の表示名。内部の指標名ではなく、意味が伝わる言葉にする。
+ * badge は駅カードに出す短い表記（label をそのまま使うと文がつながらないため別に持つ）。
+ */
+export const SORT_MODES: {
+  mode: SortMode;
+  label: string;
+  hint: string;
+  badge: string;
+}[] = [
+  {
+    mode: 'fair',
+    label: 'みんな公平に',
+    hint: '全員が同じくらいの距離',
+    badge: '公平さで選出',
+  },
+  {
+    mode: 'sum',
+    label: '全体の移動が最小',
+    hint: '合計距離がいちばん短い',
+    badge: '合計距離で選出',
+  },
+  {
+    mode: 'max',
+    label: '一番遠い人を優先',
+    hint: '最長の人の距離が短い',
+    badge: '最長距離で選出',
+  },
+];
 
 /**
  * 4.4 レビュー数を考慮した加重スコア。

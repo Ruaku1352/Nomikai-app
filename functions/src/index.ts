@@ -13,8 +13,12 @@ import {
   type LatLng,
 } from './google';
 import {
+  fairnessScore,
+  formatPriceLevel,
+  formatPriceRange,
   haversineMeters,
   isOpenAt,
+  stddev,
   summarizeCosts,
   weightedScore,
 } from './util';
@@ -204,7 +208,8 @@ router.post(
       );
     });
 
-    const { sum, max, avg } = summarizeCosts(Object.values(distances));
+    const values = Object.values(distances);
+    const { sum, max, avg } = summarizeCosts(values);
 
     return {
       ...station,
@@ -212,6 +217,9 @@ router.post(
       sumMeters: Math.round(sum),
       maxMeters: Math.round(max),
       avgMeters: Math.round(avg),
+      // 「みんな公平に」の並び順に使う。ばらつきと複合スコア。
+      stdMeters: Math.round(stddev(values)),
+      fairnessMeters: Math.round(fairnessScore(values)),
       // 同点時のタイブレーク用（重心に近い駅を優先する）
       centroidMeters: Math.round(haversineMeters(center, station.location)),
     };
@@ -267,6 +275,7 @@ router.post(
             rating: p.rating ?? null,
             userRatingCount: p.userRatingCount ?? null,
             priceLevel: formatPriceLevel(p.priceLevel),
+            priceRange: formatPriceRange(p.priceRange),
             photoUrl: p.photos?.[0]?.name
               ? `/api/photo?name=${encodeURIComponent(p.photos[0].name)}`
               : null,
@@ -360,21 +369,4 @@ function isFiniteLatLng(v: unknown): v is LatLng {
     Math.abs(p.lat) <= 90 &&
     Math.abs(p.lng) <= 180
   );
-}
-
-function formatPriceLevel(level: string | undefined): string | null {
-  switch (level) {
-    case 'PRICE_LEVEL_FREE':
-      return '無料';
-    case 'PRICE_LEVEL_INEXPENSIVE':
-      return '¥';
-    case 'PRICE_LEVEL_MODERATE':
-      return '¥¥';
-    case 'PRICE_LEVEL_EXPENSIVE':
-      return '¥¥¥';
-    case 'PRICE_LEVEL_VERY_EXPENSIVE':
-      return '¥¥¥¥';
-    default:
-      return null;
-  }
 }

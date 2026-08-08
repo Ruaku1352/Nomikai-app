@@ -38,6 +38,9 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 | ファイル | 役割 |
 |---|---|
 | `src/components/StationInput.tsx` | 駅名オートコンプリート。**1文字目から部分一致で最大5件**表示、一致部分をハイライト、↑↓/Enter/Escでキーボード操作。**250msデバウンス**・入力中断時は `AbortController` でキャンセル。**IME変換中は検索せず、変換確定のEnterを候補選択と取り違えない**。候補選択時に Place Details で緯度経度を解決する |
+| `src/components/StationPicker.tsx` | 駅候補の一覧（フルスクリーン）。**最大20件**を所在地付きで表示し、検索窓で絞り込める。**開いたときに1回だけ**リクエストする（Autocompleteはリクエスト数がそのまま課金に効くため） |
+| `src/components/SavedGroups.tsx` | メンバー構成の保存・読み込み・削除。**localStorageのみ**でサーバには送らない（個人名を含むため）。上限10件、超過時は古いものから押し出す |
+| `src/components/BeerLoader.tsx` | 検索中のビールアニメーション（SVG + CSS）。`prefers-reduced-motion` では静止表示 |
 | `src/components/StationCard.tsx` | 駅カード（アコーディオン）。平均/最長の距離サマリ、メンバー別の距離、地図リンク、ジャンル別の店舗リスト |
 | `src/components/VenueCard.tsx` | 店カード。写真、店名、星評価、レビュー件数、価格帯、駅からの徒歩分、営業中バッジ、営業時間。タップでGoogleマップへ遷移 |
 
@@ -45,6 +48,7 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 
 | ファイル | 役割 |
 |---|---|
+| `src/store/useMemberGroupsStore.ts` | 保存したメンバー構成。`nomikai-app-member-groups` として**検索結果とは別キー**で永続化 |
 | `src/store/useAppStore.ts` | Zustand + persist。入力状態と**直前の検索結果**を localStorage に保存（オフライン閲覧用）。`search()` と `ensureVenues()` を持つ |
 | `src/lib/api.ts` | `/api/**` へのクライアント。エラーレスポンスを日本語メッセージに変換する `ApiError` |
 | `src/lib/scoring.ts` | `rankStations()`（指標別の並べ替え）、`weightedScore()`、`centroid()`、`formatDistance()` |
@@ -174,7 +178,7 @@ Text Search に「渋谷 駅」と投げると Google が絞り込みすぎて�
 | `functions/src/index.ts` | Express ルーティング、入力バリデーション、候補駅の絞り込み、距離とスコアの集計、エラーハンドリング |
 | `functions/src/google.ts` | Places API (New) のラッパー。APIキーの取得と、上流エラーの秘匿（キー情報を含みうる本文はクライアントに返さない） |
 | `functions/src/util.ts` | `haversineMeters()`、`summarizeCosts()`、`weightedScore()`、`isOpenAt()`（営業時間判定）、`rankByNameMatch()`（駅名一致の採点） |
-| `functions/test/util.test.js` | 上記の純粋関数のユニットテスト（node:test、39件） |
+| `functions/test/util.test.js` | 上記の純粋関数のユニットテスト（node:test、53件） |
 
 ---
 
@@ -210,8 +214,18 @@ score_sum(駅) = Σ(各メンバーの距離)
 score_max(駅) = max(各メンバーの距離)
 ```
 
-- UI上で「合計最小 / 最長最小」を切替（指標の中身が距離になっただけで、UIの構造は変更なし）
-- 同点時は**全員の重心に近い駅**を優先。それも同じならもう一方の指標で比較
+既定は **fair（みんな公平に）**。
+
+```
+score_fair(駅) = mean(距離) + k * stddev(距離)   // k = 1.0
+```
+
+ばらつきだけで並べると全員が等しく遠い駅（全員30kmなら標準偏差0）が最良になるため、
+近さと公平さの複合スコアにしています。式と k の根拠は `functions/src/util.ts` のコメント参照。
+
+- UI上で「みんな公平に / 全体の移動が最小 / 一番遠い人を優先」の3つから選べる
+- 同点時は**全員の重心に近い駅**を優先。それも同じなら合計距離で比較
+- 駅カードには標準偏差を距離の単位で表示（分散は km² で直感的でないため）
 
 ### 店舗検索・ソート（仕様 4.4）
 
@@ -246,7 +260,7 @@ score_max(駅) = max(各メンバーの距離)
 | 対象 | 状態 |
 |---|---|
 | フロントエンド / functions のビルド | 通過 |
-| 距離計算・スコア集計・加重スコア・営業時間判定・駅名マッチング | ユニットテスト39件が通過（`npm --prefix functions test`） |
+| 距離計算・スコア集計・加重スコア・営業時間判定・駅名マッチング・公平さスコア・価格表示 | ユニットテスト53件が通過（`npm --prefix functions test`） |
 | 全エンドポイントの疎通・レスポンス整形・エラー処理 | Places APIをモックして確認。Routes API が呼ばれないことも確認済み |
 | **実APIキーを使った動作** | **未検証** |
 

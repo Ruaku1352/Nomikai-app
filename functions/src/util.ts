@@ -107,6 +107,42 @@ export function rankByNameMatch<T extends { placeId: string; name: string }>(
 }
 
 /**
+ * 「みんな公平に」の並び順に使う複合スコア。
+ *
+ *   score = mean + FAIRNESS_K * stddev
+ *
+ * ばらつき（標準偏差）だけで並べると、**全員が等しく遠い駅**が最良になってしまう。
+ * 例えば全員から30km離れた駅は標準偏差ゼロで満点になるが、集合場所としては最悪。
+ * そのため「近さ（mean）」と「公平さ（stddev）」を足し合わせた複合スコアにしている。
+ *
+ * k = 1.0 の根拠:
+ *   mean も stddev も同じ単位（m）なので、k は「ばらつき1mを距離何m分の
+ *   ペナルティとみなすか」を表す。k=1.0 だと、
+ *   - 全員2km（mean 2000 / stddev 0）  → 2000
+ *   - 1kmと3km（mean 2000 / stddev 1000）→ 3000
+ *   となり、平均が同じなら偏っている方が明確に不利になる。
+ *   一方、全員10kmの駅（10000）が、1kmと3kmの駅（3000）に勝つことはない。
+ *   k を大きくすると公平さ重視、小さくすると近さ重視に寄る。
+ */
+export const FAIRNESS_K = 1.0;
+
+/** 母標準偏差（サンプルではなく母集団。メンバー全員が対象なので n で割る） */
+export function stddev(values: number[]): number {
+  if (values.length === 0) return 0;
+  const mean = values.reduce((a, v) => a + v, 0) / values.length;
+  const variance =
+    values.reduce((a, v) => a + (v - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+/** 上記の複合スコア。値が小さいほど「みんなにとって公平で近い」 */
+export function fairnessScore(values: number[], k = FAIRNESS_K): number {
+  if (values.length === 0) return 0;
+  const mean = values.reduce((a, v) => a + v, 0) / values.length;
+  return mean + k * stddev(values);
+}
+
+/**
  * 候補駅1件分のコスト集計。
  *
  * 引数の `costs` は「各メンバーから候補駅までのコスト」で、単位には依存しない。
@@ -191,4 +227,63 @@ function localDayMinutes(date: Date, timeZone: string) {
   const hour = Number(get('hour')) % 24;
   const minute = Number(get('minute'));
   return { day, minutes: hour * 60 + minute };
+}
+
+/* --------------------------------------------------------- 平均予算 */
+
+/** Places の priceLevel を Google マップと同じ記号に変換する */
+export function formatPriceLevel(level: string | undefined | null): string | null {
+  switch (level) {
+    case 'PRICE_LEVEL_FREE':
+      return '無料';
+    case 'PRICE_LEVEL_INEXPENSIVE':
+      return '¥';
+    case 'PRICE_LEVEL_MODERATE':
+      return '¥¥';
+    case 'PRICE_LEVEL_EXPENSIVE':
+      return '¥¥¥';
+    case 'PRICE_LEVEL_VERY_EXPENSIVE':
+      return '¥¥¥¥';
+    default:
+      return null;
+  }
+}
+
+/**
+ * priceRange を「3,000〜4,000円」の形にする。
+ * Money の units は文字列で返る。通貨は priceRange 側の currencyCode を尊重し、
+ * 無ければ日本円とみなす。片側しか無い場合は「3,000円〜」「〜4,000円」とする。
+ */
+export function formatPriceRange(
+  range:
+    | {
+        startPrice?: { currencyCode?: string; units?: string };
+        endPrice?: { currencyCode?: string; units?: string };
+      }
+    | undefined
+    | null,
+): string | null {
+  const start = toAmount(range?.startPrice?.units);
+  const end = toAmount(range?.endPrice?.units);
+  if (start == null && end == null) return null;
+
+  const currency =
+    range?.startPrice?.currencyCode ?? range?.endPrice?.currencyCode ?? 'JPY';
+  const format = (v: number) =>
+    currency === 'JPY'
+      ? `${v.toLocaleString('ja-JP')}円`
+      : `${v.toLocaleString('ja-JP')} ${currency}`;
+
+  if (start != null && end != null) {
+    return currency === 'JPY'
+      ? `${start.toLocaleString('ja-JP')}〜${format(end)}`
+      : `${format(start)}〜${format(end)}`;
+  }
+  return start != null ? `${format(start)}〜` : `〜${format(end as number)}`;
+}
+
+function toAmount(units: string | undefined): number | null {
+  if (units == null) return null;
+  const n = Number(units);
+  return Number.isFinite(n) ? n : null;
 }
