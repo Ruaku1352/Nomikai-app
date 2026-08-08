@@ -163,7 +163,7 @@ export function StationInput({ value, placeholder, onChange }: Props) {
         aria-expanded={open}
         aria-autocomplete="list"
         value={query}
-        placeholder={placeholder ?? '例：渋谷'}
+        placeholder={placeholder ?? '例：渋谷 / 桜井 箕面'}
         onChange={(e) => {
           setQuery(e.target.value);
           if (value) onChange(null);
