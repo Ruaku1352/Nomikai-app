@@ -6,6 +6,8 @@ import { StationPicker } from './StationPicker';
 interface Props {
   value: StationRef | null;
   placeholder?: string;
+  /** ラベルと紐づけるための id */
+  id?: string;
   onChange: (station: StationRef | null) => void;
 }
 
@@ -22,7 +24,7 @@ const DEBOUNCE_MS = 350;
  * 駅名オートコンプリート。
  * 1文字目から部分一致で候補を最大5件出し、↑↓とEnterで選べる。
  */
-export function StationInput({ value, placeholder, onChange }: Props) {
+export function StationInput({ value, placeholder, id, onChange }: Props) {
   const [query, setQuery] = useState(value?.name ?? '');
   const [suggestions, setSuggestions] = useState<AutocompleteSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -32,7 +34,15 @@ export function StationInput({ value, placeholder, onChange }: Props) {
   );
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
-  const skipNextFetch = useRef(false);
+  /**
+   * 次の検索を1回だけ見送るフラグ。
+   *
+   * 初期値は「確定済みの駅を持った状態でマウントされたか」。
+   * 保存したメンバーを読み込むとメンバーのidが変わってコンポーネントが再マウントされ、
+   * 入力欄に駅名が入った状態で始まる。そこで検索を投げると候補リストが開いてしまい、
+   * 確定済みなのに選び直しを求めているように見えてしまう。
+   */
+  const skipNextFetch = useRef(Boolean(value?.name));
   // 日本語入力の変換中は確定前の文字が流れてくるので、その間は検索しない
   const [composing, setComposing] = useState(false);
   // 一覧（最大20件）を開いているか。開いたときにだけ追加のリクエストが飛ぶ
@@ -42,7 +52,15 @@ export function StationInput({ value, placeholder, onChange }: Props) {
     // 駅が確定したときだけ入力欄を同期する。
     // value が null に戻ったとき（＝ユーザーが編集を始めたとき）に空にしてしまうと、
     // 選択済みの状態から打ち直せなくなる。
-    if (value?.name) setQuery(value.name);
+    if (!value?.name) return;
+    setQuery((prev) => {
+      if (prev === value.name) return prev;
+      // 外から確定済みの駅が入った場合（保存したメンバーの読み込みなど）は、
+      // 入力欄が変わっても検索を投げない。投げると候補リストが開いてしまい、
+      // 確定済みなのに選び直しを求めているように見える。
+      skipNextFetch.current = true;
+      return value.name;
+    });
   }, [value?.placeId, value?.name]);
 
   useEffect(() => {
@@ -156,6 +174,7 @@ export function StationInput({ value, placeholder, onChange }: Props) {
   return (
     <div className="relative" ref={containerRef}>
       <input
+        id={id}
         type="text"
         inputMode="search"
         autoComplete="off"
@@ -163,7 +182,7 @@ export function StationInput({ value, placeholder, onChange }: Props) {
         aria-expanded={open}
         aria-autocomplete="list"
         value={query}
-        placeholder={placeholder ?? '例：渋谷 / 桜井 箕面'}
+        placeholder={placeholder ?? '例：渋谷'}
         onChange={(e) => {
           setQuery(e.target.value);
           if (value) onChange(null);

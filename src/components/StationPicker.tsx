@@ -109,9 +109,8 @@ export function StationPicker({ initialQuery, onSelect, onClose }: Props) {
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <p className="mb-3 rounded-xl bg-accent-soft px-3 py-2 text-xs leading-relaxed text-accent-ink">
-          同じ名前の駅が全国にある場合は、「桜井 箕面」のように
-          <strong>地名を足す</strong>か「阪急桜井」のように
-          <strong>路線名を足す</strong>と絞り込めます。
+          同じ名前の駅が全国にある場合は、<strong>地名</strong>（例:「府中 東京」）や
+          <strong>路線名</strong>（例:「京王府中」）を足すと絞り込めます。
         </p>
 
         {loading && <p className="py-6 text-center text-sm text-ink-faint">検索中…</p>}

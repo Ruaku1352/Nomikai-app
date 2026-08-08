@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { useMemberGroupsStore } from '../store/useMemberGroupsStore';
 import { StationInput } from '../components/StationInput';
 import { SavedGroups } from '../components/SavedGroups';
+
+type Tab = 'input' | 'saved';
 
 export function MembersScreen() {
   const members = useAppStore((s) => s.members);
@@ -10,6 +14,10 @@ export function MembersScreen() {
   const updateMemberName = useAppStore((s) => s.updateMemberName);
   const setMemberStation = useAppStore((s) => s.setMemberStation);
   const setStep = useAppStore((s) => s.setStep);
+  const savedCount = useMemberGroupsStore((s) => s.groups.length);
+
+  // 保存した構成が増えると入力画面が混み合うので、タブで分ける
+  const [tab, setTab] = useState<Tab>('input');
 
   const filled = members.filter((m) => m.station?.location).length;
   const canProceed = filled >= 2;
@@ -23,62 +31,98 @@ export function MembersScreen() {
         </p>
       </header>
 
-      <div className="flex items-center gap-3">
-        <label htmlFor="count" className="text-sm text-ink-soft">
-          人数
-        </label>
-        <input
-          id="count"
-          type="number"
-          min={2}
-          max={10}
-          value={members.length}
-          onChange={(e) => setMemberCount(Number(e.target.value))}
-          className="w-20 rounded-xl border border-line bg-surface px-3 py-2 text-ink focus:border-accent focus:outline-none"
-        />
-        <span className="text-xs text-ink-faint">2〜10人</span>
+      <div className="flex gap-1 rounded-xl border border-line bg-surface p-1">
+        <TabButton active={tab === 'input'} onClick={() => setTab('input')}>
+          メンバーを入力
+        </TabButton>
+        <TabButton active={tab === 'saved'} onClick={() => setTab('saved')}>
+          保存したメンバー
+          {savedCount > 0 && (
+            <span className="ml-1 text-[11px] font-normal">({savedCount})</span>
+          )}
+        </TabButton>
       </div>
 
-      <ul className="space-y-4">
-        {members.map((m, i) => (
-          <li key={m.id} className="rounded-2xl border border-line bg-surface p-4 shadow-card">
-            <div className="mb-2 flex items-center justify-between">
-              <input
-                type="text"
-                value={m.name}
-                placeholder={`メンバー${i + 1}`}
-                onChange={(e) => updateMemberName(m.id, e.target.value)}
-                className="w-40 bg-transparent text-sm font-semibold text-ink placeholder:text-ink-faint focus:outline-none"
-              />
-              {members.length > 2 && (
-                <button
-                  type="button"
-                  onClick={() => removeMember(m.id)}
-                  className="text-xs text-ink-faint hover:text-red-700"
-                >
-                  削除
-                </button>
-              )}
-            </div>
-            <StationInput
-              value={m.station}
-              onChange={(station) => setMemberStation(m.id, station)}
+      {tab === 'saved' ? (
+        <SavedGroups onApplied={() => setTab('input')} />
+      ) : (
+        <>
+          <div className="flex items-center gap-3">
+            <label htmlFor="count" className="text-sm text-ink-soft">
+              人数
+            </label>
+            <input
+              id="count"
+              type="number"
+              min={2}
+              max={10}
+              value={members.length}
+              onChange={(e) => setMemberCount(Number(e.target.value))}
+              className="w-20 rounded-xl border border-line bg-surface px-3 py-2 text-ink focus:border-accent focus:outline-none"
             />
-          </li>
-        ))}
-      </ul>
+            <span className="text-xs text-ink-faint">2〜10人</span>
+          </div>
 
-      {members.length < 10 && (
-        <button
-          type="button"
-          onClick={addMember}
-          className="w-full rounded-xl border border-dashed border-line py-3 text-sm text-ink-soft hover:border-accent hover:text-accent-ink"
-        >
-          ＋ メンバーを追加
-        </button>
+          <ul className="space-y-4">
+            {members.map((m, i) => (
+              <li
+                key={m.id}
+                className="rounded-2xl border border-line bg-surface p-4 shadow-card"
+              >
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <label
+                      htmlFor={`name-${m.id}`}
+                      className="mb-1 block text-xs text-ink-soft"
+                    >
+                      名前（任意）
+                    </label>
+                    <input
+                      id={`name-${m.id}`}
+                      type="text"
+                      value={m.name}
+                      placeholder={`メンバー${i + 1}`}
+                      onChange={(e) => updateMemberName(m.id, e.target.value)}
+                      className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+                    />
+                  </div>
+                  {members.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => removeMember(m.id)}
+                      className="mt-6 shrink-0 rounded-lg px-2 py-2 text-xs text-ink-faint hover:text-red-700"
+                    >
+                      削除
+                    </button>
+                  )}
+                </div>
+
+                <label
+                  htmlFor={`station-${m.id}`}
+                  className="mb-1 block text-xs text-ink-soft"
+                >
+                  最寄駅
+                </label>
+                <StationInput
+                  id={`station-${m.id}`}
+                  value={m.station}
+                  onChange={(station) => setMemberStation(m.id, station)}
+                />
+              </li>
+            ))}
+          </ul>
+
+          {members.length < 10 && (
+            <button
+              type="button"
+              onClick={addMember}
+              className="w-full rounded-xl border border-dashed border-line py-3 text-sm text-ink-soft hover:border-accent hover:text-accent-ink"
+            >
+              ＋ メンバーを追加
+            </button>
+          )}
+        </>
       )}
-
-      <SavedGroups />
 
       <button
         type="button"
@@ -89,5 +133,28 @@ export function MembersScreen() {
         {canProceed ? '次へ：ジャンルを選ぶ' : '最寄駅を2人以上入力してください'}
       </button>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex-1 rounded-lg px-2 py-2 text-xs font-semibold ${
+        active ? 'bg-accent text-ink shadow-card' : 'text-ink-soft'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
