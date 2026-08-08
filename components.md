@@ -29,7 +29,7 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 | ファイル | 役割 |
 |---|---|
 | `src/App.tsx` | 3ステップのタブナビゲーション、ローディングオーバーレイ、エラー表示、オンライン/オフライン検知 |
-| `src/screens/MembersScreen.tsx` | 人数指定（2〜10人）と各メンバーの最寄駅入力。2人以上の駅が確定するまで次へ進めない |
+| `src/screens/MembersScreen.tsx` | 「メンバーを入力」「保存したメンバー」の2タブ。人数指定（2〜10人）、各メンバーの**名前（任意）**と最寄駅の入力。2人以上の駅が確定するまで次へ進めない |
 | `src/screens/GenresScreen.tsx` | ジャンル選択（居酒屋 / 焼肉 / しゃぶしゃぶ / 寿司 + 自由入力）、集合時間帯（任意・お店の営業時間フィルタ用）、指標の初期選択、検索実行 |
 | `src/screens/ResultScreen.tsx` | 上位3駅の表示、指標の切替、アコーディオンの開閉と店舗の遅延取得 |
 
@@ -37,9 +37,9 @@ Firebase Hosting の rewrite で `/api/**` → `api` 関数に転送されます
 
 | ファイル | 役割 |
 |---|---|
-| `src/components/StationInput.tsx` | 駅名オートコンプリート。**1文字目から部分一致で最大5件**表示、一致部分をハイライト、↑↓/Enter/Escでキーボード操作。**250msデバウンス**・入力中断時は `AbortController` でキャンセル。**IME変換中は検索せず、変換確定のEnterを候補選択と取り違えない**。候補選択時に Place Details で緯度経度を解決する |
+| `src/components/StationInput.tsx` | 駅名オートコンプリート。**1文字目から部分一致で最大5件**表示、一致部分をハイライト、↑↓/Enter/Escでキーボード操作。**250msデバウンス**・入力中断時は `AbortController` でキャンセル。**IME変換中は検索せず、変換確定のEnterを候補選択と取り違えない**。**確定済みの駅を持った状態でマウント・更新された場合は検索を投げない**（保存したメンバーを読み込んだときに候補リストが開いてしまうのを防ぐ）。候補選択時に Place Details で緯度経度を解決する |
 | `src/components/StationPicker.tsx` | 駅候補の一覧（フルスクリーン）。**最大20件**を所在地付きで表示し、検索窓で絞り込める。**開いたときに1回だけ**リクエストする（Autocompleteはリクエスト数がそのまま課金に効くため） |
-| `src/components/SavedGroups.tsx` | メンバー構成の保存・読み込み・削除。**localStorageのみ**でサーバには送らない（個人名を含むため）。上限10件、超過時は古いものから押し出す |
+| `src/components/SavedGroups.tsx` | メンバー構成の保存・読み込み・削除。**localStorageのみ**でサーバには送らない（個人名を含むため）。上限10件、超過時は古いものから押し出す。読み込むと入力タブへ自動で戻る |
 | `src/components/BeerLoader.tsx` | 検索中のビールアニメーション（SVG + CSS）。`prefers-reduced-motion` では静止表示 |
 | `src/components/StationCard.tsx` | 駅カード（アコーディオン）。平均/最長の距離サマリ、メンバー別の距離、地図リンク、ジャンル別の店舗リスト |
 | `src/components/VenueCard.tsx` | 店カード。写真、店名、星評価、レビュー件数、価格帯、駅からの徒歩分、営業中バッジ、営業時間。タップでGoogleマップへ遷移 |

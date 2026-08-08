@@ -8,7 +8,7 @@ import { useAppStore } from '../store/useAppStore';
  * 保存先はブラウザの localStorage だけで、サーバには送らない（個人名を含むため）。
  * 上限は MAX_GROUPS 件で、超える場合は最も古いものが押し出される。
  */
-export function SavedGroups() {
+export function SavedGroups({ onApplied }: { onApplied?: () => void }) {
   const groups = useMemberGroupsStore((s) => s.groups);
   const save = useMemberGroupsStore((s) => s.save);
   const remove = useMemberGroupsStore((s) => s.remove);
@@ -26,8 +26,10 @@ export function SavedGroups() {
 
   return (
     <section className="rounded-2xl border border-line bg-surface p-4 shadow-card">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-ink">保存したメンバー</h2>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-ink-faint">
+          選ぶとメンバーがまとめて入ります
+        </p>
         {groups.length > 0 && (
           <button
             type="button"
@@ -53,7 +55,10 @@ export function SavedGroups() {
             <li key={g.id} className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => applyMembers(g.members)}
+                onClick={() => {
+                  applyMembers(g.members);
+                  onApplied?.();
+                }}
                 className="flex-1 rounded-xl border border-line px-3 py-2 text-left active:bg-accent-soft"
               >
                 <span className="block text-sm font-medium text-ink">
@@ -61,7 +66,10 @@ export function SavedGroups() {
                 </span>
                 <span className="block truncate text-xs text-ink-faint">
                   {g.members.length}人 ・{' '}
-                  {g.members.map((m) => m.station?.name).join('、')}
+                  {/* 名前を付けていれば名前、無ければ駅名で中身が分かるようにする */}
+                  {g.members
+                    .map((m, i) => m.name.trim() || m.station?.name || `メンバー${i + 1}`)
+                    .join('、')}
                 </span>
               </button>
               <button
