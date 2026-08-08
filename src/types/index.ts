@@ -42,11 +42,21 @@ export interface CandidateStation {
   maxMeters: number;
   /** 平均距離(m) */
   avgMeters: number;
+  /** 距離のばらつき（標準偏差, m）。「みんな公平に」の表示と並び順に使う */
+  stdMeters: number;
+  /** 平均 + k×標準偏差 の複合スコア(m)。小さいほど公平で近い */
+  fairnessMeters: number;
   /** 全員の重心からの距離(m)。同点時のタイブレークに使う */
   centroidMeters: number;
 }
 
-export type SortMode = 'sum' | 'max';
+/**
+ * 候補駅の並び順。
+ * - fair: みんな公平に（平均 + k×標準偏差。既定）
+ * - sum : 全体の移動が最小
+ * - max : 一番遠い人を優先
+ */
+export type SortMode = 'fair' | 'sum' | 'max';
 
 export interface Venue {
   placeId: string;
@@ -54,6 +64,8 @@ export interface Venue {
   rating: number | null;
   userRatingCount: number | null;
   priceLevel: string | null;
+  /** 具体的な金額レンジ（例: 3,000〜4,000円）。取れないことも多い */
+  priceRange: string | null;
   photoUrl: string | null;
   address: string | null;
   /** 駅からの直線距離(m) */

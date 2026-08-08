@@ -1,5 +1,5 @@
 import type { CandidateStation, Member, SortMode, VenueGroup } from '../types';
-import { formatDistance } from '../lib/scoring';
+import { SORT_MODES, formatDistance } from '../lib/scoring';
 import { VenueCard } from './VenueCard';
 
 interface Props {
@@ -40,9 +40,10 @@ export function StationCard({
           </span>
           <span className="block text-xs text-ink-faint">
             平均 {formatDistance(station.avgMeters)} / 最長{' '}
-            {formatDistance(station.maxMeters)}
-            <span className="ml-2 text-accent-ink">
-              {sortMode === 'sum' ? '合計距離が最小' : '最長距離が最小'}
+            {formatDistance(station.maxMeters)} / ばらつき ±
+            {formatDistance(station.stdMeters)}
+            <span className="ml-2 block text-accent-ink">
+              {SORT_MODES.find((m) => m.mode === sortMode)?.badge}
             </span>
           </span>
         </span>

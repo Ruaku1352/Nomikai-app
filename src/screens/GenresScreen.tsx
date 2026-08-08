@@ -1,4 +1,5 @@
 import { DEFAULT_GENRES, useAppStore } from '../store/useAppStore';
+import { SORT_MODES } from '../lib/scoring';
 
 export function GenresScreen() {
   const genres = useAppStore((s) => s.genres);
@@ -75,19 +76,42 @@ export function GenresScreen() {
 
       <div>
         <p className="mb-2 text-sm text-ink-soft">駅の選び方</p>
-        <div className="flex rounded-xl border border-line bg-surface p-1">
-          <ModeButton
-            active={sortMode === 'sum'}
-            onClick={() => setSortMode('sum')}
-            label="合計最小"
-            hint="全員の距離の合計が短い"
-          />
-          <ModeButton
-            active={sortMode === 'max'}
-            onClick={() => setSortMode('max')}
-            label="最長最小"
-            hint="一番遠い人の距離が短い"
-          />
+        <div className="space-y-2">
+          {SORT_MODES.map((m) => {
+            const on = sortMode === m.mode;
+            return (
+              <button
+                key={m.mode}
+                type="button"
+                onClick={() => setSortMode(m.mode)}
+                aria-pressed={on}
+                className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left shadow-card transition-colors ${
+                  on
+                    ? 'border-accent bg-accent-soft'
+                    : 'border-line bg-surface'
+                }`}
+              >
+                <span
+                  className={`h-4 w-4 shrink-0 rounded-full border-2 ${
+                    on ? 'border-accent bg-accent' : 'border-line'
+                  }`}
+                  aria-hidden
+                />
+                <span>
+                  <span
+                    className={`block text-sm font-semibold ${
+                      on ? 'text-accent-ink' : 'text-ink'
+                    }`}
+                  >
+                    {m.label}
+                  </span>
+                  <span className="block text-[11px] text-ink-faint">
+                    {m.hint}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -109,35 +133,5 @@ export function GenresScreen() {
         </button>
       </div>
     </div>
-  );
-}
-
-function ModeButton({
-  active,
-  onClick,
-  label,
-  hint,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  hint: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`flex-1 rounded-lg px-3 py-2 text-center ${
-        active ? 'bg-accent text-ink shadow-card' : 'text-ink-soft'
-      }`}
-    >
-      <span className="block text-sm font-semibold">{label}</span>
-      <span
-        className={`block text-[11px] ${active ? 'text-ink/70' : 'text-ink-faint'}`}
-      >
-        {hint}
-      </span>
-    </button>
   );
 }

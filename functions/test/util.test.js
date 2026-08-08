@@ -311,3 +311,108 @@ test('rankByNameMatch: 漢字入力でも一致があればそれだけ返す', 
     ['渋谷駅'],
   );
 });
+
+/* ------------------------------------------------- 公平さの複合スコア */
+
+const { stddev, fairnessScore, FAIRNESS_K } = require('../lib/util');
+
+test('stddev: 全員が同じ距離ならばらつきは0', () => {
+  assert.equal(stddev([2000, 2000, 2000]), 0);
+});
+
+test('stddev: 既知の値と一致する（母標準偏差）', () => {
+  // [1000, 3000] → 平均2000、偏差±1000
+  assert.equal(stddev([1000, 3000]), 1000);
+  // [2, 4, 4, 4, 5, 5, 7, 9] は母標準偏差2の教科書例
+  assert.equal(stddev([2, 4, 4, 4, 5, 5, 7, 9]), 2);
+});
+
+test('stddev: 空配列でも落ちない', () => {
+  assert.equal(stddev([]), 0);
+});
+
+test('fairnessScore: 平均が同じなら偏りが大きい方が不利', () => {
+  const even = fairnessScore([2000, 2000]);
+  const skewed = fairnessScore([1000, 3000]);
+  assert.equal(even, 2000);
+  assert.equal(skewed, 3000);
+  assert.ok(even < skewed);
+});
+
+test('fairnessScore: 全員が等しく遠い駅が最良にならない', () => {
+  // ばらつきだけで並べると 全員30km（stddev 0）が満点になってしまう。
+  // 複合スコアなら 1km/3km の駅の方が上位に来ること。
+  const farButEven = fairnessScore([30000, 30000]);
+  const nearButSkewed = fairnessScore([1000, 3000]);
+  assert.ok(nearButSkewed < farButEven);
+});
+
+test('fairnessScore: k を大きくするほど公平さを重視する', () => {
+  const skewed = [1000, 3000];
+  assert.ok(fairnessScore(skewed, 2) > fairnessScore(skewed, 1));
+  // 偏りが無ければ k を変えてもスコアは動かない
+  assert.equal(fairnessScore([2000, 2000], 5), fairnessScore([2000, 2000], 1));
+});
+
+test('fairnessScore: 既定の k は 1.0', () => {
+  assert.equal(FAIRNESS_K, 1.0);
+  assert.equal(fairnessScore([1000, 3000]), fairnessScore([1000, 3000], 1.0));
+});
+
+test('fairnessScore: 1人なら平均そのもの', () => {
+  assert.equal(fairnessScore([2500]), 2500);
+});
+
+/* --------------------------------------------------------- 平均予算 */
+
+const { formatPriceLevel, formatPriceRange } = require('../lib/util');
+
+test('formatPriceLevel: Googleマップと同じ記号に変換する', () => {
+  assert.equal(formatPriceLevel('PRICE_LEVEL_INEXPENSIVE'), '¥');
+  assert.equal(formatPriceLevel('PRICE_LEVEL_MODERATE'), '¥¥');
+  assert.equal(formatPriceLevel('PRICE_LEVEL_EXPENSIVE'), '¥¥¥');
+  assert.equal(formatPriceLevel('PRICE_LEVEL_VERY_EXPENSIVE'), '¥¥¥¥');
+  assert.equal(formatPriceLevel('PRICE_LEVEL_FREE'), '無料');
+});
+
+test('formatPriceLevel: 不明な値・未指定は null（行を出さない）', () => {
+  assert.equal(formatPriceLevel(undefined), null);
+  assert.equal(formatPriceLevel('PRICE_LEVEL_UNSPECIFIED'), null);
+});
+
+test('formatPriceRange: 上下限が揃っていれば範囲で返す', () => {
+  assert.equal(
+    formatPriceRange({
+      startPrice: { currencyCode: 'JPY', units: '3000' },
+      endPrice: { currencyCode: 'JPY', units: '4000' },
+    }),
+    '3,000〜4,000円',
+  );
+});
+
+test('formatPriceRange: 片側だけでも表示する', () => {
+  assert.equal(
+    formatPriceRange({ startPrice: { currencyCode: 'JPY', units: '5000' } }),
+    '5,000円〜',
+  );
+  assert.equal(
+    formatPriceRange({ endPrice: { currencyCode: 'JPY', units: '2000' } }),
+    '〜2,000円',
+  );
+});
+
+test('formatPriceRange: JPY以外は通貨コードを尊重する', () => {
+  assert.equal(
+    formatPriceRange({
+      startPrice: { currencyCode: 'USD', units: '20' },
+      endPrice: { currencyCode: 'USD', units: '30' },
+    }),
+    '20 USD〜30 USD',
+  );
+});
+
+test('formatPriceRange: 情報が無ければ null（行を出さない）', () => {
+  assert.equal(formatPriceRange(undefined), null);
+  assert.equal(formatPriceRange({}), null);
+  assert.equal(formatPriceRange({ startPrice: { units: 'abc' } }), null);
+});

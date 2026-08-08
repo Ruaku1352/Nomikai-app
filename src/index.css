@@ -22,3 +22,76 @@ body {
     sans-serif;
   overscroll-behavior-y: none;
 }
+
+/* ---------------------------------------------- ビールのローディング */
+
+/* 下から注がれて満ちていく。translateY で下端から持ち上げる */
+@keyframes beer-pour {
+  0% {
+    transform: translateY(84px);
+  }
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+}
+
+/* 泡が上に立ちのぼって消える */
+@keyframes beer-rise {
+  0% {
+    transform: translateY(130px);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(46px);
+    opacity: 0;
+  }
+}
+
+/* 泡がわずかに上下する */
+@keyframes beer-foam-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.beer-fill {
+  animation: beer-pour 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.beer-bubble {
+  animation: beer-rise 2.4s ease-in infinite;
+}
+.beer-bubble-1 {
+  animation-delay: 0.5s;
+}
+.beer-bubble-2 {
+  animation-delay: 1.1s;
+}
+.beer-bubble-3 {
+  animation-delay: 1.7s;
+}
+.beer-foam {
+  animation: beer-foam-bob 2.4s ease-in-out infinite;
+}
+
+/*
+ * 動きを減らす設定の環境では、満杯のジョッキを静止表示する。
+ * 泡の粒は動かないと不自然なので隠す。
+ */
+@media (prefers-reduced-motion: reduce) {
+  .beer-fill,
+  .beer-foam {
+    animation: none;
+  }
+  .beer-bubble {
+    animation: none;
+    opacity: 0;
+  }
+}
