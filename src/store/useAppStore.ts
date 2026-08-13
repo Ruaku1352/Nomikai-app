@@ -42,7 +42,7 @@ interface AppState {
   errorDetails: string | null;
   /** 最後に計算した結果。オフラインでも閲覧できるよう永続化する */
   result: ResultPayload | null;
-  /** 読み込み中の保存済みメンバー構成のid。編集・更新の対象になる */
+  /** 選択中の保存済みメンバー構成のid。編集・更新の対象になる */
   activeGroupId: string | null;
 
   setStep: (step: Step) => void;
@@ -55,7 +55,7 @@ interface AppState {
   setCustomGenre: (value: string) => void;
   setMeetTime: (value: string) => void;
   setSortMode: (mode: SortMode) => void;
-  /** 保存したメンバー構成を読み込む。groupId を渡すと編集対象になる */
+  /** 保存したメンバー構成を読み込む。groupId を渡すと選択中の構成になる */
   applyMembers: (members: Member[], groupId?: string | null) => void;
   setActiveGroupId: (id: string | null) => void;
   clearError: () => void;

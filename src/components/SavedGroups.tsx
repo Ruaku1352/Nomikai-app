@@ -51,7 +51,7 @@ export function SavedGroups({ onApplied }: { onApplied?: () => void }) {
               <button
                 type="button"
                 onClick={() => {
-                  // 読み込んだ構成は、そのまま編集・更新の対象になる
+                  // 選択した構成は、そのまま編集・更新の対象になる
                   applyMembers(g.members, g.id);
                   onApplied?.();
                 }}

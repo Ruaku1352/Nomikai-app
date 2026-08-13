@@ -10,7 +10,7 @@ type Mode = 'idle' | 'save' | 'update';
  * 保存の導線は入力画面側に置く。保存タブの中にあると、
  * 「保存する」操作があること自体に気づきにくいため。
  *
- * 保存済みの構成を読み込んでいる間（activeGroupId がある間）は、
+ * 保存済みの構成を選択している間（activeGroupId がある間）は、
  * その構成名を出して「更新」できるようにする。
  */
 export function MemberSaveBar() {
@@ -136,14 +136,14 @@ export function MemberSaveBar() {
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm text-ink">
               <span className="font-semibold">「{activeGroup.name}」</span>
-              <span className="text-ink-faint">を編集中</span>
+              <span className="text-ink-faint">を選択中</span>
             </p>
             <button
               type="button"
               onClick={() => setActiveGroupId(null)}
               className="shrink-0 text-xs text-ink-faint underline"
             >
-              編集をやめる
+              選択を解除
             </button>
           </div>
           <div className="mt-3 flex gap-2">

@@ -22,7 +22,7 @@ interface MemberGroupsState {
   groups: MemberGroup[];
   /**
    * 同名の構成があれば上書き、無ければ追加。上限を超えたら最も古いものを捨てる。
-   * 追加した構成の id を返すので、呼び出し側で「編集中」の対象にできる。
+   * 追加した構成の id を返すので、呼び出し側で「選択中」の対象にできる。
    */
   save: (name: string, members: Member[]) => string | null;
   /** 既存の構成を、名前ごと差し替える（並び順と id は保つ） */

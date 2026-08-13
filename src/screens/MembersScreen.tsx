@@ -36,7 +36,7 @@ export function MembersScreen() {
 
       <div className="flex gap-1 rounded-xl border border-line bg-surface p-1">
         <TabButton active={tab === 'input'} onClick={() => setTab('input')}>
-          {/* 保存済みを読み込んでいる間は、どの構成を編集しているかタブに出す */}
+          {/* 保存済みを読み込んでいる間は、どの構成を選択しているかタブに出す */}
           {activeGroup ? (
             <span className="block truncate">{activeGroup.name}</span>
           ) : (
