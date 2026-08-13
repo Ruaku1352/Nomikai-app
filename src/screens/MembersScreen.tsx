@@ -3,6 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useMemberGroupsStore } from '../store/useMemberGroupsStore';
 import { StationInput } from '../components/StationInput';
 import { SavedGroups } from '../components/SavedGroups';
+import { MemberSaveBar } from '../components/MemberSaveBar';
 
 type Tab = 'input' | 'saved';
 
@@ -14,7 +15,9 @@ export function MembersScreen() {
   const updateMemberName = useAppStore((s) => s.updateMemberName);
   const setMemberStation = useAppStore((s) => s.setMemberStation);
   const setStep = useAppStore((s) => s.setStep);
-  const savedCount = useMemberGroupsStore((s) => s.groups.length);
+  const groups = useMemberGroupsStore((s) => s.groups);
+  const activeGroupId = useAppStore((s) => s.activeGroupId);
+  const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
 
   // 保存した構成が増えると入力画面が混み合うので、タブで分ける
   const [tab, setTab] = useState<Tab>('input');
@@ -33,12 +36,17 @@ export function MembersScreen() {
 
       <div className="flex gap-1 rounded-xl border border-line bg-surface p-1">
         <TabButton active={tab === 'input'} onClick={() => setTab('input')}>
-          メンバーを入力
+          {/* 保存済みを読み込んでいる間は、どの構成を編集しているかタブに出す */}
+          {activeGroup ? (
+            <span className="block truncate">{activeGroup.name}</span>
+          ) : (
+            'メンバーを入力'
+          )}
         </TabButton>
         <TabButton active={tab === 'saved'} onClick={() => setTab('saved')}>
           保存したメンバー
-          {savedCount > 0 && (
-            <span className="ml-1 text-[11px] font-normal">({savedCount})</span>
+          {groups.length > 0 && (
+            <span className="ml-1 text-[11px] font-normal">({groups.length})</span>
           )}
         </TabButton>
       </div>
@@ -121,6 +129,8 @@ export function MembersScreen() {
               ＋ メンバーを追加
             </button>
           )}
+
+          <MemberSaveBar />
         </>
       )}
 

@@ -20,11 +20,21 @@ export const MAX_GROUPS = 10;
 
 interface MemberGroupsState {
   groups: MemberGroup[];
-  /** 同名の構成があれば上書き、無ければ追加。上限を超えたら最も古いものを捨てる */
-  save: (name: string, members: Member[]) => void;
+  /**
+   * 同名の構成があれば上書き、無ければ追加。上限を超えたら最も古いものを捨てる。
+   * 追加した構成の id を返すので、呼び出し側で「編集中」の対象にできる。
+   */
+  save: (name: string, members: Member[]) => string | null;
+  /** 既存の構成を、名前ごと差し替える（並び順と id は保つ） */
+  update: (id: string, name: string, members: Member[]) => void;
   remove: (id: string) => void;
   /** 保存した構成をすべて消す（個人情報を残さないための導線） */
   clearAll: () => void;
+}
+
+/** 駅が確定しているメンバーだけを、参照を切って取り出す */
+function confirmedMembers(members: Member[]): Member[] {
+  return members.filter((m) => m.station?.location).map((m) => ({ ...m }));
 }
 
 export const useMemberGroupsStore = create<MemberGroupsState>()(
@@ -32,26 +42,42 @@ export const useMemberGroupsStore = create<MemberGroupsState>()(
     (set) => ({
       groups: [],
 
-      save: (name, members) =>
-        set((s) => {
-          const trimmed = name.trim();
-          if (!trimmed) return s;
-          // 駅が確定しているメンバーだけを保存する
-          const keep = members
-            .filter((m) => m.station?.location)
-            .map((m) => ({ ...m }));
-          if (keep.length === 0) return s;
+      save: (name, members) => {
+        const trimmed = name.trim();
+        const keep = confirmedMembers(members);
+        if (!trimmed || keep.length === 0) return null;
 
-          const entry: MemberGroup = {
-            id: `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-            name: trimmed,
-            members: keep,
-            savedAt: Date.now(),
-          };
+        const entry: MemberGroup = {
+          id: `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          name: trimmed,
+          members: keep,
+          savedAt: Date.now(),
+        };
+        set((s) => {
           // 同名は上書き
           const others = s.groups.filter((g) => g.name !== trimmed);
-          const next = [entry, ...others];
-          return { groups: next.slice(0, MAX_GROUPS) };
+          return { groups: [entry, ...others].slice(0, MAX_GROUPS) };
+        });
+        return entry.id;
+      },
+
+      update: (id, name, members) =>
+        set((s) => {
+          const trimmed = name.trim();
+          const keep = confirmedMembers(members);
+          if (!trimmed || keep.length === 0) return s;
+          if (!s.groups.some((g) => g.id === id)) return s;
+
+          return {
+            groups: s.groups
+              // 別の構成が同じ名前を持っていたら、そちらを畳む
+              .filter((g) => g.id === id || g.name !== trimmed)
+              .map((g) =>
+                g.id === id
+                  ? { ...g, name: trimmed, members: keep, savedAt: Date.now() }
+                  : g,
+              ),
+          };
         }),
 
       remove: (id) =>

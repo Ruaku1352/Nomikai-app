@@ -42,6 +42,8 @@ interface AppState {
   errorDetails: string | null;
   /** 最後に計算した結果。オフラインでも閲覧できるよう永続化する */
   result: ResultPayload | null;
+  /** 読み込み中の保存済みメンバー構成のid。編集・更新の対象になる */
+  activeGroupId: string | null;
 
   setStep: (step: Step) => void;
   addMember: () => void;
@@ -53,8 +55,9 @@ interface AppState {
   setCustomGenre: (value: string) => void;
   setMeetTime: (value: string) => void;
   setSortMode: (mode: SortMode) => void;
-  /** 保存したメンバー構成を読み込む */
-  applyMembers: (members: Member[]) => void;
+  /** 保存したメンバー構成を読み込む。groupId を渡すと編集対象になる */
+  applyMembers: (members: Member[], groupId?: string | null) => void;
+  setActiveGroupId: (id: string | null) => void;
   clearError: () => void;
   reset: () => void;
   /** 選択中ジャンルの実効リスト（自由入力を含む） */
@@ -67,7 +70,13 @@ interface AppState {
 /** localStorage に保存する範囲（partialize と対応させる） */
 type PersistedState = Pick<
   AppState,
-  'members' | 'genres' | 'customGenre' | 'meetTime' | 'sortMode' | 'result'
+  | 'members'
+  | 'genres'
+  | 'customGenre'
+  | 'meetTime'
+  | 'sortMode'
+  | 'result'
+  | 'activeGroupId'
 >;
 
 const MAX_MEMBERS = 10;
@@ -95,6 +104,7 @@ export const useAppStore = create<AppState>()(
       error: null,
       errorDetails: null,
       result: null,
+      activeGroupId: null,
 
       setStep: (step) => set({ step }),
 
@@ -146,13 +156,17 @@ export const useAppStore = create<AppState>()(
       setMeetTime: (meetTime) => set({ meetTime }),
       setSortMode: (sortMode) => set({ sortMode }),
 
-      applyMembers: (members) =>
+      applyMembers: (members, groupId = null) =>
         set({
-          members: members.length >= MIN_MEMBERS ? members.map((m) => ({ ...m })) : members,
+          members:
+            members.length >= MIN_MEMBERS ? members.map((m) => ({ ...m })) : members,
+          activeGroupId: groupId,
           step: 'members',
           error: null,
           errorDetails: null,
         }),
+
+      setActiveGroupId: (activeGroupId) => set({ activeGroupId }),
       clearError: () => set({ error: null, errorDetails: null }),
 
       reset: () =>
@@ -165,6 +179,7 @@ export const useAppStore = create<AppState>()(
           result: null,
           error: null,
           errorDetails: null,
+          activeGroupId: null,
         }),
 
       effectiveGenres: () => {
@@ -321,6 +336,7 @@ export const useAppStore = create<AppState>()(
         return state;
       },
       partialize: (s) => ({
+        activeGroupId: s.activeGroupId,
         members: s.members,
         genres: s.genres,
         customGenre: s.customGenre,
